@@ -74,7 +74,7 @@ npm start
 3. Git (https://git-scm.com/download/win)
 
 ## 后端部署步骤
-1. 克隆项目后进入项目目录
+1. 进入后端目录：
 ```bash
 cd backend
 ```
@@ -85,21 +85,20 @@ python -m venv venv
 .\venv\Scripts\activate
 ```
 
-3. 安装依赖
+3. 安装依赖：
 ```bash
 pip install -r requirements.txt
 ```
 
-4. 初始化数据库
-```bash
-python init_db.py
-```
-
-5. 启动后端服务
+4. 启动服务器（会自动初始化数据库）：
 ```bash
 python app.py
 ```
 服务将在 http://localhost:5002 运行
+
+初始管理员账号：
+- 邮箱：admin@websync.com
+- 密码：admin123
 
 ## 前端部署步骤
 1. 进入前端目录
