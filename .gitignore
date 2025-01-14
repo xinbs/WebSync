@@ -37,3 +37,6 @@ __pycache__/
 # Cache
 .cache/
 /frontend/.cache/ 
+
+# Ignore node_modules
+/frontend/dist/node_modules/
