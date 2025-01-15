@@ -1,11 +1,8 @@
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 const config = {
-  // 开发环境使用 localhost
-  // 生产环境使用当前域名
-  apiBaseUrl: isDevelopment 
-    ? 'http://localhost:5002'
-    : `http://${window.location.hostname}:5002`
+  // 使用相对路径，请求会被开发服务器代理到后端
+  apiBaseUrl: '/api'
 };
 
 export default config; 
