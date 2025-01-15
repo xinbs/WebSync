@@ -29,18 +29,35 @@ const FileList = ({ currentUser }) => {
     // 初始化 WebSocket 连接
     const newSocket = io('http://localhost:5002', {
       transports: ['websocket'],
-      upgrade: false
+      upgrade: false,
+      reconnection: true,        // 启用重连
+      reconnectionAttempts: 5,   // 最多重试5次
+      reconnectionDelay: 3000    // 重连延迟3秒
     });
 
     newSocket.on('connect', () => {
       console.log('Connected to WebSocket server');
     });
 
+    newSocket.on('connect_error', (error) => {
+      console.log('WebSocket connection error:', error);
+      // 连接错误时不要自动刷新
+    });
+
+    newSocket.on('disconnect', (reason) => {
+      console.log('WebSocket disconnected:', reason);
+      // 断开连接时不要自动刷新
+    });
+
     newSocket.on('files_updated', (data) => {
       console.log('Files updated:', data);
       // 只在文件变更时才刷新列表
-      if (data.message === '文件已更新' || data.message === '新文件已添加' || data.message === '文件已删除') {
-        fetchFiles();  // 收到更新通知时重新获取文件列表
+      if (data && data.message && (
+        data.message === '文件已更新' || 
+        data.message === '新文件已添加' || 
+        data.message === '文件已删除'
+      )) {
+        fetchFiles();
       }
     });
 

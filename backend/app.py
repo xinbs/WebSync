@@ -47,7 +47,7 @@ db = SQLAlchemy(app)
 jwt = JWTManager(app)
 
 # 初始化 SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent', ping_timeout=60)
 
 @socketio.on('connect')
 def handle_connect():
@@ -941,6 +941,10 @@ if __name__ == '__main__':
         # 使用 gevent 运行 WebSocket 服务器
         from gevent import pywsgi
         from geventwebsocket.handler import WebSocketHandler
+        
+        # 允许所有来源的 WebSocket 连接
+        socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent', ping_timeout=60)
+        
         server = pywsgi.WSGIServer(('127.0.0.1', 5002), app, handler_class=WebSocketHandler)
         print('WebSync 服务已启动，监听地址：http://127.0.0.1:5002')
         server.serve_forever()
