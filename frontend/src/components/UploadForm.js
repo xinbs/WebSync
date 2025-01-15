@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, Button, message, Typography } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
-import axios from 'axios';
-import config from '../config';
+import axios from '../utils/axios';
 
 const { Text } = Typography;
 
@@ -19,11 +18,9 @@ const UploadForm = () => {
       setUploading(true);
       setUploadStatus({ show: true, success: true, text: '正在上传...' });
       
-      const token = localStorage.getItem('token');
       await axios.post('/api/upload', formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`
+          'Content-Type': 'multipart/form-data'
         },
         timeout: 30000,
         onUploadProgress: (progressEvent) => {
@@ -41,16 +38,7 @@ const UploadForm = () => {
       return true;
     } catch (error) {
       console.error('Error uploading file:', error);
-      let errorMessage = '上传失败';
-      if (error.code === 'ECONNABORTED') {
-        errorMessage = '上传超时，请检查网络连接';
-      } else if (error.response) {
-        errorMessage = `上传失败: ${error.response.data?.error || '服务器错误'}`;
-      } else if (error.request) {
-        errorMessage = '无法连接到服务器，请检查网络';
-      }
-      
-      setUploadStatus({ show: true, success: false, text: errorMessage });
+      setUploadStatus({ show: true, success: false, text: '上传失败' });
       setTimeout(() => setUploadStatus({ show: false, success: true, text: '' }), 5000);
       return false;
     } finally {

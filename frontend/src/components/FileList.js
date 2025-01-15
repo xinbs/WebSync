@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Tag, Space, Typography } from 'antd';
 import { DownloadOutlined, SyncOutlined, ShareAltOutlined, DeleteOutlined, GlobalOutlined, UserOutlined } from '@ant-design/icons';
-import axios from 'axios';
+import axios from '../utils/axios';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -16,12 +16,7 @@ const FileList = ({ currentUser }) => {
 
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/api/users', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await axios.get('/api/users');
       setUsers(response.data.filter(user => user.id !== currentUser.id));
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -31,12 +26,7 @@ const FileList = ({ currentUser }) => {
   const fetchFiles = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/api/files', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await axios.get('/api/files');
       setFiles(response.data);
     } catch (error) {
       console.error('Error fetching files:', error);
@@ -54,12 +44,8 @@ const FileList = ({ currentUser }) => {
 
   const handleDownload = async (path, owner) => {
     try {
-      const token = localStorage.getItem('token');
       const response = await axios.get(`/api/download/${path}`, {
-        responseType: 'blob',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        responseType: 'blob'
       });
       
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -71,7 +57,6 @@ const FileList = ({ currentUser }) => {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      message.error('下载文件失败');
       console.error('Error downloading file:', error);
     }
   };
@@ -85,30 +70,21 @@ const FileList = ({ currentUser }) => {
   const handleShareSubmit = async () => {
     try {
       const values = await shareForm.validateFields();
-      const token = localStorage.getItem('token');
       await axios.post(`/api/files/${selectedFile.id}/share`, {
         type: values.shareType,
         user_email: values.shareType === 'user' ? values.userEmail : undefined
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
       });
       message.success('文件共享成功');
       setShareModalVisible(false);
       fetchFiles();
     } catch (error) {
-      message.error(error.response?.data?.error || '共享失败');
+      console.error('Error sharing file:', error);
     }
   };
 
   const handleUnshare = async (file, type, userEmail) => {
     try {
-      const token = localStorage.getItem('token');
       await axios.delete(`/api/files/${file.id}/share`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
         data: {
           type,
           user_email: userEmail
@@ -117,22 +93,17 @@ const FileList = ({ currentUser }) => {
       message.success('已取消共享');
       fetchFiles();
     } catch (error) {
-      message.error(error.response?.data?.error || '取消共享失败');
+      console.error('Error unsharing file:', error);
     }
   };
 
   const handleDelete = async (file) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`/api/files/${file.id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      await axios.delete(`/api/files/${file.id}`);
       message.success('文件删除成功');
       fetchFiles();
     } catch (error) {
-      message.error(error.response?.data?.error || '删除失败');
+      console.error('Error deleting file:', error);
     }
   };
 
