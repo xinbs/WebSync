@@ -67,8 +67,6 @@ const FileList = ({ currentUser }) => {
   useEffect(() => {
     fetchFiles();
     fetchUsers();
-    const interval = setInterval(fetchFiles, 5000);
-    return () => clearInterval(interval);
   }, []);
 
   const handleDownload = async (path, owner) => {
