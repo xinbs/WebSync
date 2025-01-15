@@ -7,7 +7,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 启用 CORS
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 
 // 添加基本的请求日志
 app.use((req, res, next) => {
@@ -19,17 +22,31 @@ app.use((req, res, next) => {
 const apiProxy = createProxyMiddleware({
   target: 'http://127.0.0.1:5002',
   changeOrigin: true,
+  secure: false,
+  ws: true,
+  xfwd: true,
   pathRewrite: {
-    '^/api': ''  // 移除 /api 前缀，因为后端已经有了
+    '^/api': '/api'  // 保持 /api 前缀
   },
   onProxyReq: (proxyReq, req, res) => {
     // 记录原始请求和重写后的请求
     console.log(`代理请求: ${req.method} ${req.url} -> ${proxyReq.path}`);
+    
+    // 添加必要的头部
+    proxyReq.setHeader('Origin', 'http://127.0.0.1:5002');
+    if (req.headers.authorization) {
+      proxyReq.setHeader('Authorization', req.headers.authorization);
+    }
   },
   onProxyRes: (proxyRes, req, res) => {
+    // 添加 CORS 头部
+    proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+    proxyRes.headers['Access-Control-Allow-Methods'] = 'GET,HEAD,PUT,PATCH,POST,DELETE';
+    proxyRes.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
+    
     console.log(`代理响应: ${req.method} ${req.url} -> ${proxyRes.statusCode}`);
     if (proxyRes.statusCode === 404) {
-      console.error('404错误 - 原始URL:', req.url, '代理后URL:', proxyReq.path);
+      console.error('404错误 - 原始URL:', req.url);
     }
   },
   onError: (err, req, res) => {
@@ -48,15 +65,15 @@ const apiProxy = createProxyMiddleware({
   }
 });
 
-// 先处理静态文件
+// 先处理 API 代理
+app.use('/api', apiProxy);
+
+// 然后处理静态文件
 app.use(express.static(path.join(__dirname, 'build'), {
   maxAge: '1h',
   etag: true,
   lastModified: true
 }));
-
-// 然后是 API 代理
-app.use('/api', apiProxy);
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
@@ -77,7 +94,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`工作目录: ${process.cwd()}`);
   console.log('代理配置:', {
     target: 'http://127.0.0.1:5002',
-    pathRewrite: '^/api -> ""'
+    pathRewrite: '保持 /api 前缀'
   });
 });
 
