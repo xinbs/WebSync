@@ -945,8 +945,9 @@ if __name__ == '__main__':
         # 允许所有来源的 WebSocket 连接
         socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent', ping_timeout=60)
         
-        server = pywsgi.WSGIServer(('127.0.0.1', 5002), app, handler_class=WebSocketHandler)
-        print('WebSync 服务已启动，监听地址：http://127.0.0.1:5002')
+        # 监听所有地址
+        server = pywsgi.WSGIServer(('0.0.0.0', 5002), app, handler_class=WebSocketHandler)
+        print('WebSync 服务已启动，监听地址：http://0.0.0.0:5002')
         server.serve_forever()
     finally:
         observer.stop()

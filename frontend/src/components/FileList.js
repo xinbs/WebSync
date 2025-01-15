@@ -26,8 +26,9 @@ const FileList = ({ currentUser }) => {
   };
 
   useEffect(() => {
-    // 初始化 WebSocket 连接
-    const newSocket = io('http://localhost:5002', {
+    // 初始化 WebSocket 连接，使用代理路径
+    const newSocket = io({
+      path: '/socket.io',  // 使用代理路径
       transports: ['websocket'],
       upgrade: false,
       reconnection: true,        // 启用重连

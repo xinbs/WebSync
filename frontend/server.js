@@ -37,10 +37,11 @@ const apiProxy = createProxyMiddleware({
   target: BACKEND_URL,
   changeOrigin: true,
   secure: false,
-  ws: true,
+  ws: true,  // 启用 WebSocket 代理
   xfwd: true,
   pathRewrite: {
-    '^/api': '/api'  // 保持 /api 前缀
+    '^/api': '/api',  // 保持 /api 前缀
+    '^/socket.io': '/socket.io'  // 添加 WebSocket 路径重写
   },
   onProxyReq: (proxyReq, req, res) => {
     // 添加必要的请求头
@@ -61,14 +62,15 @@ const apiProxy = createProxyMiddleware({
   }
 });
 
-// 先处理 API 代理
+// 设置代理路由
 app.use('/api', apiProxy);
+app.use('/socket.io', apiProxy);  // 添加 WebSocket 代理路由
 
-// 然后处理静态文件
+// 静态文件服务
 app.use(express.static(path.join(__dirname, 'build'), {
-  maxAge: '1h',
-  etag: true,
-  lastModified: true
+  maxAge: '1h',        // 设置客户端缓存时间为1小时
+  etag: true,          // 启用 ETag 支持
+  lastModified: true   // 启用 Last-Modified 支持
 }));
 
 // 错误处理中间件
