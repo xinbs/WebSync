@@ -18,7 +18,7 @@ const FileList = ({ currentUser }) => {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${config.apiBaseUrl}/api/users`, {
+      const response = await axios.get('/api/users', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -33,7 +33,7 @@ const FileList = ({ currentUser }) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${config.apiBaseUrl}/api/files`, {
+      const response = await axios.get('/api/files', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -56,7 +56,7 @@ const FileList = ({ currentUser }) => {
   const handleDownload = async (path, owner) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${config.apiBaseUrl}/api/download/${path}`, {
+      const response = await axios.get(`/api/download/${path}`, {
         responseType: 'blob',
         headers: {
           'Authorization': `Bearer ${token}`

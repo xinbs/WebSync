@@ -20,7 +20,7 @@ const UploadForm = () => {
       setUploadStatus({ show: true, success: true, text: '正在上传...' });
       
       const token = localStorage.getItem('token');
-      await axios.post(`${config.apiBaseUrl}/api/upload`, formData, {
+      await axios.post('/api/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${token}`
