@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Upload, Button, message, Typography } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import axios from 'axios';
+import config from '../config';
 
 const { Text } = Typography;
 
@@ -19,12 +20,12 @@ const UploadForm = () => {
       setUploadStatus({ show: true, success: true, text: '正在上传...' });
       
       const token = localStorage.getItem('token');
-      await axios.post('http://localhost:5002/api/upload', formData, {
+      await axios.post(`${config.apiBaseUrl}/api/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${token}`
         },
-        timeout: 30000, // 30秒超时
+        timeout: 30000,
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
           setUploadStatus({ 
