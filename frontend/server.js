@@ -25,46 +25,21 @@ const apiProxy = createProxyMiddleware({
   secure: false,
   ws: true,
   xfwd: true,
-  pathRewrite: function (path, req) {
-    // 移除第一个 /api，保留后面的路径
-    const newPath = path.replace('/api', '');
-    console.log(`路径重写: ${path} -> ${newPath}`);
-    return newPath;
+  pathRewrite: {
+    '^/api': '/api'  // 保持 /api 前缀
   },
   onProxyReq: (proxyReq, req, res) => {
-    // 记录原始请求和重写后的请求
-    console.log(`代理请求: ${req.method} ${req.url} -> ${proxyReq.path}`);
-    
-    // 添加必要的头部
-    proxyReq.setHeader('Origin', 'http://127.0.0.1:5002');
-    if (req.headers.authorization) {
-      proxyReq.setHeader('Authorization', req.headers.authorization);
-    }
+    console.log('代理请求:', req.method, req.path, '->', proxyReq.path);
   },
   onProxyRes: (proxyRes, req, res) => {
-    // 添加 CORS 头部
-    proxyRes.headers['Access-Control-Allow-Origin'] = '*';
-    proxyRes.headers['Access-Control-Allow-Methods'] = 'GET,HEAD,PUT,PATCH,POST,DELETE';
-    proxyRes.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
-    
-    console.log(`代理响应: ${req.method} ${req.url} -> ${proxyRes.statusCode}`);
+    console.log('代理响应:', req.method, req.path, '->', proxyRes.statusCode);
     if (proxyRes.statusCode === 404) {
-      console.error('404错误 - 原始URL:', req.url, '重写后URL:', proxyRes.req.path);
+      console.log('404错误 - 原始URL:', req.url, '代理URL:', proxyRes.req.path);
     }
   },
   onError: (err, req, res) => {
     console.error('代理错误:', err);
-    console.error('请求详情:', {
-      method: req.method,
-      url: req.url,
-      headers: req.headers,
-      target: 'http://127.0.0.1:5002'
-    });
-    res.status(500).json({ 
-      error: '代理服务器错误',
-      message: err.message,
-      code: err.code
-    });
+    res.status(500).json({ error: '代理服务器错误' });
   }
 });
 
@@ -97,7 +72,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`工作目录: ${process.cwd()}`);
   console.log('代理配置:', {
     target: 'http://127.0.0.1:5002',
-    pathRewrite: '移除第一个 /api'
+    pathRewrite: '保持 /api 前缀'
   });
 });
 

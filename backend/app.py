@@ -16,20 +16,31 @@ from crypto_utils import crypto  # 导入加密工具
 import base64
 import io
 import logging
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# 从环境变量加载配置
+UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')
+SYNC_FOLDER = os.environ.get('SYNC_FOLDER', 'sync')
+SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///websync.db')
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'your-secret-key')
+JWT_ACCESS_TOKEN_EXPIRES = int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRES', 86400))
+
 app = Flask(__name__)
-CORS(app)
+
+# 配置 CORS，允许所有跨域请求（仅用于开发环境）
+CORS(app, supports_credentials=True)
 
 # 配置
-UPLOAD_FOLDER = 'uploads'
-SYNC_FOLDER = 'sync'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///websync.db'
-app.config['JWT_SECRET_KEY'] = 'your-secret-key'  # 在生产环境中使用安全的密钥
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=1)
+app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
+app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=JWT_ACCESS_TOKEN_EXPIRES)
 
 db = SQLAlchemy(app)
 jwt = JWTManager(app)
@@ -816,8 +827,8 @@ if __name__ == '__main__':
     observer.start()
     
     try:
-        # 允许从任何 IP 访问，不要在生产环境使用 debug=True
-        app.run(host='127.0.0.1', port=5002)
+        # 允许从本地任意地址访问
+        app.run(host='0.0.0.0', port=5002, debug=True)
     finally:
         observer.stop()
         observer.join()

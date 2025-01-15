@@ -4,6 +4,7 @@ import { message } from 'antd';
 // 创建 axios 实例
 const instance = axios.create({
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -17,6 +18,8 @@ instance.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // 确保 withCredentials 始终为 true
+    config.withCredentials = true;
     return config;
   },
   (error) => {
