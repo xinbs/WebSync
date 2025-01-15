@@ -20,8 +20,8 @@ app = Flask(__name__)
 CORS(app)
 
 # 配置
-UPLOAD_FOLDER = 'uploads'
-SYNC_FOLDER = 'sync'
+UPLOAD_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), 'uploads'))
+SYNC_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), 'sync'))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///websync.db'
 app.config['JWT_SECRET_KEY'] = 'your-secret-key'  # 在生产环境中使用安全的密钥
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=1)
@@ -105,8 +105,10 @@ def update_file_info(file_path):
         print(f"Error updating file info: {e}")
 
 def init_upload_folder():
+    """初始化上传目录"""
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(SYNC_FOLDER, exist_ok=True)
+    os.makedirs(os.path.join(UPLOAD_FOLDER, 'clipboard_images'), exist_ok=True)
 
 def create_initial_admin():
     try:
@@ -503,15 +505,15 @@ def create_clipboard_item():
             os.makedirs(image_dir, exist_ok=True)
             
             # 读取文件内容并加密
-            file_content = file.read()  # 已经是bytes类型
-            encrypted_content = crypto.encrypt(file_content)  # 返回bytes类型
+            file_content = file.read()
+            encrypted_content = crypto.encrypt(file_content)
             
-            # 生成唯一文件名
+            # 生成唯一文件名并规范化路径
             timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
             filename = f"{timestamp}_{secure_filename(file.filename)}.enc"
-            file_path = os.path.join(image_dir, filename)
+            file_path = os.path.normpath(os.path.join(image_dir, filename))
             
-            # 直接写入加密后的二进制内容
+            # 写入加密后的二进制内容
             with open(file_path, 'wb') as f:
                 f.write(encrypted_content)
             
@@ -605,24 +607,24 @@ def get_clipboard_image(item_id):
         if item.type != 'image' or not item.image_path:
             return jsonify({'error': '图片不存在'}), 404
             
-        file_path = os.path.join(UPLOAD_FOLDER, 'clipboard_images', item.image_path)
+        file_path = os.path.normpath(os.path.join(UPLOAD_FOLDER, 'clipboard_images', item.image_path))
         if not os.path.exists(file_path):
             return jsonify({'error': '图片文件不存在'}), 404
 
-        # 读取加密的图片内容（二进制）
+        # 读取加密的图片内容
         with open(file_path, 'rb') as f:
-            encrypted_content = f.read()  # 读取为bytes类型
+            encrypted_content = f.read()
         
         # 解密图片内容
         try:
-            decrypted_content = crypto.decrypt(encrypted_content)  # 返回bytes类型
+            decrypted_content = crypto.decrypt(encrypted_content)
             if not decrypted_content:
                 raise Exception('解密后的内容为空')
                 
             # 返回解密后的图片
             return send_file(
                 io.BytesIO(decrypted_content),
-                mimetype='image/*',
+                mimetype='image/png',  # 统一使用 PNG 格式
                 as_attachment=False
             )
         except Exception as e:
