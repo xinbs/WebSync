@@ -9,3 +9,5 @@ pycryptodome==3.19.1
 watchdog==6.0.0
 bcrypt==4.1.2
 python-dotenv==1.0.0
+Flask-SocketIO==5.3.6
+eventlet==0.35.1

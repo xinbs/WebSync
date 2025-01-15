@@ -1,138 +1,98 @@
-# WebSync - 网页文件同步工具
+# WebSync
 
-WebSync 是一个简单但功能强大的网页文件同步工具，用于在不同网络环境的计算机之间快速共享和同步文件。
+WebSync 是一个基于 Flask 和 React 的文件同步和共享系统。
 
-## 功能特点
+## 功能特性
 
-- 基于Web界面的文件上传和下载
-- 实时文件同步
-- 支持文件夹同步
-- 简单易用的用户界面
-- 支持断点续传
-- 文件变更检测
+- 文件上传、下载和管理
+- 文件实时同步和更新
+- 用户权限管理
+- 文件共享功能
+- 剪贴板同步
+- WebSocket 实时通知
 
-## 技术栈
+## 系统要求
 
-- 后端：Python Flask
-- 前端：React
-- 数据存储：SQLite
+- Python 3.8+
+- Node.js 14+
+- SQLite3
 
-## 快速开始
+## 安装部署
 
-### 后端设置
+### 后端部署
 
-1. 进入后端目录：
+1. 安装依赖：
 ```bash
 cd backend
-```
-
-2. 安装依赖：
-```bash
 pip install -r requirements.txt
 ```
 
-3. 启动服务器：
+2. 配置环境变量（可选）：
+创建 `.env` 文件并设置以下配置：
+```plaintext
+UPLOAD_FOLDER=uploads
+SYNC_FOLDER=sync
+SQLALCHEMY_DATABASE_URI=sqlite:///websync.db
+JWT_SECRET_KEY=your-secret-key
+JWT_ACCESS_TOKEN_EXPIRES=86400
+```
+
+3. 启动后端服务：
 ```bash
 python app.py
 ```
+后端服务将在 http://127.0.0.1:5002 上运行
 
-### 前端设置
+### 前端部署
 
-1. 进入前端目录：
+1. 安装依赖：
 ```bash
 cd frontend
-```
-
-2. 安装依赖：
-```bash
 npm install
 ```
 
-3. 启动开发服务器：
+2. 启动开发服务器：
 ```bash
 npm start
 ```
+或者构建并启动生产服务器：
+```bash
+npm run build
+npm run serve
+```
 
-## 使用方法
-
-1. 在浏览器中访问 http://localhost:3000
-2. 选择要同步的文件夹
-3. 设置同步目标
-4. 开始同步
+前端服务将在 http://localhost:3000 上运行
 
 ## 注意事项
 
-- 确保两台计算机都能访问互联网
-- 默认端口：前端 3000，后端 5000
-- 首次使用需要设置同步目录
+1. WebSocket 配置：
+   - 后端使用 Flask-SocketIO 提供 WebSocket 服务
+   - 前端通过 socket.io-client 连接到 WebSocket 服务
+   - 确保防火墙允许 WebSocket 连接（端口 5002）
 
-# WebSync 部署指南 (Windows)
+2. 安全配置：
+   - 生产环境中修改 JWT 密钥
+   - 配置适当的 CORS 策略
+   - 使用 HTTPS 进行安全通信
 
-## 环境要求
-1. Python 3.8+ (https://www.python.org/downloads/)
-2. Node.js 16+ (https://nodejs.org/)
-3. Git (https://git-scm.com/download/win)
+3. 文件存储：
+   - 确保上传目录具有适当的写入权限
+   - 定期备份数据库和上传的文件
 
-## 后端部署步骤
-1. 进入后端目录：
-```bash
-cd backend
-```
+## 默认账户
 
-2. 创建并激活虚拟环境
-```bash
-python -m venv venv
-.\venv\Scripts\activate
-```
+- 管理员账户：
+  - 邮箱：admin@websync.com
+  - 密码：admin123
 
-3. 安装依赖：
-```bash
-pip install -r requirements.txt
-```
+## 更新日志
 
-4. 启动服务器（会自动初始化数据库）：
-```bash
-python app.py
-```
-服务将在 http://localhost:5002 运行
+### v1.1.0
+- 添加 WebSocket 支持，实现文件列表实时更新
+- 优化文件上传和删除的通知机制
+- 改进错误处理和日志记录
 
-初始管理员账号：
-- 邮箱：admin@websync.com
-- 密码：admin123
-
-## 前端部署步骤
-1. 进入前端目录
-```bash
-cd frontend
-```
-
-2. 安装依赖
-```bash
-npm install
-```
-
-3. 启动前端服务
-```bash
-npm start
-```
-服务将在 http://localhost:3000 运行
-
-## 注意事项
-1. 确保 Python 和 Node.js 已添加到系统环境变量
-2. 如果遇到权限问题，请以管理员身份运行命令提示符
-3. 确保 5002 和 3000 端口未被占用
-4. 文件上传目录会自动创建在 backend/uploads 下
-
-## 开机自启动设置
-1. 创建批处理文件 `start_websync.bat`：
-```batch
-@echo off
-cd /d %~dp0
-start cmd /k "cd backend && .\venv\Scripts\activate && python app.py"
-timeout /t 5
-start cmd /k "cd frontend && npm start"
-```
-
-2. 创建快捷方式并放入启动文件夹：
-- 按 Win+R，输入 `shell:startup`
-- 将 `start_websync.bat` 的快捷方式复制到打开的文件夹中
+### v1.0.0
+- 初始版本发布
+- 基本的文件同步和共享功能
+- 用户管理系统

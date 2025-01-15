@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Tag, Space, Typography } from 'antd';
 import { DownloadOutlined, SyncOutlined, ShareAltOutlined, DeleteOutlined, GlobalOutlined, UserOutlined } from '@ant-design/icons';
 import axios from '../utils/axios';
+import io from 'socket.io-client';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -13,6 +14,7 @@ const FileList = ({ currentUser }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [shareForm] = Form.useForm();
   const [users, setUsers] = useState([]);
+  const [socket, setSocket] = useState(null);
 
   const fetchUsers = async () => {
     try {
@@ -23,6 +25,32 @@ const FileList = ({ currentUser }) => {
     }
   };
 
+  useEffect(() => {
+    // 初始化 WebSocket 连接
+    const newSocket = io('http://localhost:5002', {
+      transports: ['websocket'],
+      upgrade: false
+    });
+
+    newSocket.on('connect', () => {
+      console.log('Connected to WebSocket server');
+    });
+
+    newSocket.on('files_updated', (data) => {
+      console.log('Files updated:', data);
+      fetchFiles();  // 收到更新通知时重新获取文件列表
+    });
+
+    setSocket(newSocket);
+
+    // 组件卸载时清理
+    return () => {
+      if (newSocket) {
+        newSocket.disconnect();
+      }
+    };
+  }, []);
+
   const fetchFiles = async () => {
     try {
       setLoading(true);
@@ -30,6 +58,7 @@ const FileList = ({ currentUser }) => {
       setFiles(response.data);
     } catch (error) {
       console.error('Error fetching files:', error);
+      message.error('获取文件列表失败');
     } finally {
       setLoading(false);
     }

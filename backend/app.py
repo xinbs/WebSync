@@ -5,6 +5,7 @@ from flask_jwt_extended import JWTManager, create_access_token, get_jwt_identity
 from werkzeug.utils import secure_filename
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from flask_socketio import SocketIO, emit
 import os
 import hashlib
 import time
@@ -45,6 +46,17 @@ app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=JWT_ACCESS_TOKEN_EXPI
 db = SQLAlchemy(app)
 jwt = JWTManager(app)
 
+# 初始化 SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
+
 class UserRole(str, Enum):
     ADMIN = 'admin'
     MANAGER = 'manager'
@@ -83,13 +95,26 @@ class FileShare(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
 class FileChangeHandler(FileSystemEventHandler):
-    def __init__(self, app_context):
+    def __init__(self, app_context, socketio):
         self.app_context = app_context
+        self.socketio = socketio
 
     def on_modified(self, event):
         if not event.is_directory:
             with self.app_context:
                 update_file_info(event.src_path)
+                # 发送文件更新事件
+                self.socketio.emit('files_updated', {'message': '文件已更新'})
+
+    def on_created(self, event):
+        if not event.is_directory:
+            with self.app_context:
+                update_file_info(event.src_path)
+                self.socketio.emit('files_updated', {'message': '新文件已添加'})
+
+    def on_deleted(self, event):
+        if not event.is_directory:
+            self.socketio.emit('files_updated', {'message': '文件已删除'})
 
 def update_file_info(file_path):
     try:
@@ -373,6 +398,9 @@ def upload_file():
                 db.session.commit()
                 logger.info("文件信息保存到数据库成功")
                 
+                # 发送文件更新通知
+                socketio.emit('files_updated', {'message': '新文件已上传'})
+                
                 return jsonify({
                     'message': '文件上传成功',
                     'file': {
@@ -543,6 +571,9 @@ def delete_file(file_id):
         # 删除文件记录
         db.session.delete(file_record)
         db.session.commit()
+        
+        # 发送文件更新通知
+        socketio.emit('files_updated', {'message': '文件已删除'})
         
         return jsonify({'message': '文件删除成功'})
     except Exception as e:
@@ -870,13 +901,13 @@ if __name__ == '__main__':
             print(f"Error during initialization: {e}")
     
     observer = Observer()
-    event_handler = FileChangeHandler(app.app_context())
+    event_handler = FileChangeHandler(app.app_context(), socketio)
     observer.schedule(event_handler, UPLOAD_FOLDER, recursive=False)
     observer.start()
     
     try:
-        # 只监听本地地址，增加安全性
-        app.run(host='127.0.0.1', port=5002, debug=False)
+        # 使用 eventlet 运行 WebSocket 服务器
+        socketio.run(app, host='127.0.0.1', port=5002, debug=False)
     finally:
         observer.stop()
         observer.join()
