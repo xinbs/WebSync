@@ -27,14 +27,14 @@ const FileList = ({ currentUser }) => {
 
   useEffect(() => {
     // 初始化 WebSocket 连接
-    const newSocket = io({
-      autoConnect: true,
+    const newSocket = io('/', {
       path: '/socket.io',
       transports: ['websocket'],
       upgrade: false,
       reconnection: true,
       reconnectionAttempts: 5,
-      reconnectionDelay: 3000
+      reconnectionDelay: 3000,
+      forceNew: true
     });
 
     newSocket.on('connect', () => {
