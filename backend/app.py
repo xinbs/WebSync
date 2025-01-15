@@ -47,7 +47,14 @@ db = SQLAlchemy(app)
 jwt = JWTManager(app)
 
 # 初始化 SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent', ping_timeout=60)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode='eventlet',  # 使用 eventlet 作为异步模式
+    ping_timeout=60,
+    logger=True,
+    engineio_logger=True
+)
 
 @socketio.on('connect')
 def handle_connect():
