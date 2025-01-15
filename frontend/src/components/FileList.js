@@ -26,14 +26,14 @@ const FileList = ({ currentUser }) => {
   };
 
   useEffect(() => {
-    // 初始化 WebSocket 连接，使用代理路径
-    const newSocket = io({
-      path: '/socket.io',  // 使用代理路径
+    // 初始化 WebSocket 连接
+    const newSocket = io(window.location.origin, {
+      path: '/socket.io',
       transports: ['websocket'],
       upgrade: false,
-      reconnection: true,        // 启用重连
-      reconnectionAttempts: 5,   // 最多重试5次
-      reconnectionDelay: 3000    // 重连延迟3秒
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 3000
     });
 
     newSocket.on('connect', () => {
