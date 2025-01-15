@@ -25,8 +25,11 @@ const apiProxy = createProxyMiddleware({
   secure: false,
   ws: true,
   xfwd: true,
-  pathRewrite: {
-    '^/api': '/api'  // 保持 /api 前缀
+  pathRewrite: function (path, req) {
+    // 移除第一个 /api，保留后面的路径
+    const newPath = path.replace('/api', '');
+    console.log(`路径重写: ${path} -> ${newPath}`);
+    return newPath;
   },
   onProxyReq: (proxyReq, req, res) => {
     // 记录原始请求和重写后的请求
@@ -46,7 +49,7 @@ const apiProxy = createProxyMiddleware({
     
     console.log(`代理响应: ${req.method} ${req.url} -> ${proxyRes.statusCode}`);
     if (proxyRes.statusCode === 404) {
-      console.error('404错误 - 原始URL:', req.url);
+      console.error('404错误 - 原始URL:', req.url, '重写后URL:', proxyRes.req.path);
     }
   },
   onError: (err, req, res) => {
@@ -94,7 +97,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`工作目录: ${process.cwd()}`);
   console.log('代理配置:', {
     target: 'http://127.0.0.1:5002',
-    pathRewrite: '保持 /api 前缀'
+    pathRewrite: '移除第一个 /api'
   });
 });
 
