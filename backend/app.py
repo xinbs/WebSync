@@ -816,7 +816,8 @@ if __name__ == '__main__':
     observer.start()
     
     try:
-        app.run(port=5002, debug=True)
+        # 允许从任何 IP 访问，不要在生产环境使用 debug=True
+        app.run(host='0.0.0.0', port=5002, debug=True)
     finally:
         observer.stop()
         observer.join()

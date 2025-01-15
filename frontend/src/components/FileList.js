@@ -86,9 +86,14 @@ const FileList = ({ currentUser }) => {
   const handleShareSubmit = async () => {
     try {
       const values = await shareForm.validateFields();
-      await axios.post(`http://localhost:5001/api/files/${selectedFile.id}/share`, {
+      const token = localStorage.getItem('token');
+      await axios.post(`${config.apiBaseUrl}/api/files/${selectedFile.id}/share`, {
         type: values.shareType,
         user_email: values.shareType === 'user' ? values.userEmail : undefined
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       message.success('文件共享成功');
       setShareModalVisible(false);
@@ -100,7 +105,11 @@ const FileList = ({ currentUser }) => {
 
   const handleUnshare = async (file, type, userEmail) => {
     try {
-      await axios.delete(`http://localhost:5001/api/files/${file.id}/share`, {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${config.apiBaseUrl}/api/files/${file.id}/share`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         data: {
           type,
           user_email: userEmail
