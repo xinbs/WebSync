@@ -15,13 +15,18 @@ from sqlalchemy import Enum as SQLEnum
 from crypto_utils import crypto  # 导入加密工具
 import base64
 import io
+import logging
+
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
 
 # 配置
-UPLOAD_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), 'uploads'))
-SYNC_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), 'sync'))
+UPLOAD_FOLDER = 'uploads'
+SYNC_FOLDER = 'sync'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///websync.db'
 app.config['JWT_SECRET_KEY'] = 'your-secret-key'  # 在生产环境中使用安全的密钥
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=1)
@@ -105,10 +110,8 @@ def update_file_info(file_path):
         print(f"Error updating file info: {e}")
 
 def init_upload_folder():
-    """初始化上传目录"""
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(SYNC_FOLDER, exist_ok=True)
-    os.makedirs(os.path.join(UPLOAD_FOLDER, 'clipboard_images'), exist_ok=True)
 
 def create_initial_admin():
     try:
@@ -131,65 +134,88 @@ def create_initial_admin():
         print(f"Error creating initial admin: {e}")
         db.session.rollback()
 
+def get_current_user():
+    try:
+        user_id = int(get_jwt_identity())
+        return User.query.get(user_id)
+    except (ValueError, TypeError):
+        return None
+
 @app.route('/api/register', methods=['POST'])
 @jwt_required()
 def register():
     current_user = User.query.get(get_jwt_identity())
-    if current_user.role != UserRole.ADMIN:
-        return jsonify({'error': '只有管理员可以创建新用户'}), 403
-
+    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER]:
+        return jsonify({'error': '没有权限创建用户'}), 403
+        
     data = request.get_json()
-    email = data.get('email')
-    password = data.get('password')
-    role = data.get('role', UserRole.USER)
-    storage_limit = data.get('storage_limit', 1024*1024*1024)  # 默认1GB
-
-    if not email or not password:
-        return jsonify({'error': '邮箱和密码不能为空'}), 400
-
-    if User.query.filter_by(email=email).first():
-        return jsonify({'error': '该邮箱已被注册'}), 400
-
-    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    if not data or 'email' not in data or 'password' not in data:
+        return jsonify({'error': '请提供邮箱和密码'}), 400
+        
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': '邮箱已被注册'}), 400
+        
+    # 验证密码长度
+    if len(data['password']) < 6:
+        return jsonify({'error': '密码长度至少为6位'}), 400
+        
+    # 创建新用户
+    hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
     new_user = User(
-        email=email,
+        email=data['email'],
         password=hashed_password,
-        role=role,
-        created_by=current_user.id,
-        storage_limit=storage_limit
+        role=data.get('role', UserRole.USER),
+        created_by=current_user.id
     )
     
     db.session.add(new_user)
     db.session.commit()
-    return jsonify({'message': '用户创建成功'}), 201
+    
+    # 创建访问令牌，确保 new_user.id 转换为字符串
+    access_token = create_access_token(identity=str(new_user.id))
+    
+    return jsonify({
+        'access_token': access_token,
+        'user': {
+            'id': new_user.id,
+            'email': new_user.email,
+            'role': new_user.role
+        }
+    }), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
-    email = data.get('email')
-    password = data.get('password')
-
-    user = User.query.filter_by(email=email).first()
-    
+    if not data or 'email' not in data or 'password' not in data:
+        return jsonify({'error': '请提供邮箱和密码'}), 400
+        
+    user = User.query.filter_by(email=data['email']).first()
     if not user:
         return jsonify({'error': '用户不存在'}), 401
         
-    if user.login_attempts >= 5 and user.last_login_attempt:
-        time_diff = datetime.utcnow() - user.last_login_attempt
-        if time_diff < timedelta(minutes=15):
-            return jsonify({'error': '登录尝试次数过多，请15分钟后再试'}), 429
-
-    if not bcrypt.checkpw(password.encode('utf-8'), user.password):
+    # 检查登录尝试次数和时间限制
+    if user.login_attempts >= 5:
+        if user.last_login_attempt and (datetime.utcnow() - user.last_login_attempt).total_seconds() < 300:
+            return jsonify({'error': '登录尝试次数过多，请5分钟后再试'}), 429
+        else:
+            # 重置登录尝试次数
+            user.login_attempts = 0
+            
+    if not bcrypt.checkpw(data['password'].encode('utf-8'), user.password):
+        # 更新登录尝试记录
         user.login_attempts += 1
         user.last_login_attempt = datetime.utcnow()
         db.session.commit()
         return jsonify({'error': '密码错误'}), 401
-
+        
+    # 登录成功，重置登录尝试记录
     user.login_attempts = 0
     user.last_login_attempt = None
     db.session.commit()
-
-    access_token = create_access_token(identity=user.id)
+    
+    # 创建访问令牌，确保 user.id 转换为字符串
+    access_token = create_access_token(identity=str(user.id))
+    
     return jsonify({
         'access_token': access_token,
         'user': {
@@ -202,101 +228,167 @@ def login():
 @app.route('/api/users', methods=['GET'])
 @jwt_required()
 def get_users():
-    current_user = User.query.get(get_jwt_identity())
-    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER]:
-        return jsonify({'error': '没有权限查看用户列表'}), 403
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'error': '用户未找到'}), 404
+            
+        if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER]:
+            return jsonify({'error': '没有权限查看用户列表'}), 403
 
-    users = User.query.all()
-    return jsonify([{
-        'id': user.id,
-        'email': user.email,
-        'role': user.role,
-        'created_at': user.created_at.isoformat(),
-        'storage_limit': user.storage_limit,
-        'storage_used': user.storage_used
-    } for user in users])
+        users = User.query.all()
+        return jsonify([{
+            'id': user.id,
+            'email': user.email,
+            'role': user.role,
+            'created_at': user.created_at.isoformat(),
+            'storage_limit': user.storage_limit,
+            'storage_used': user.storage_used
+        } for user in users])
+    except Exception as e:
+        print(f"Error in get_users: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/files', methods=['GET'])
 @jwt_required()
 def list_files():
-    current_user = User.query.get(get_jwt_identity())
-    
-    # 查询用户可以访问的所有文件
-    owned_files = File.query.filter_by(owner_id=current_user.id).all()
-    shared_files = File.query.join(FileShare).filter(FileShare.user_id == current_user.id).all()
-    public_files = File.query.filter_by(is_public=True).all()
-    
-    # 如果是管理员，可以看到所有文件
-    if current_user.role == UserRole.ADMIN:
-        all_files = File.query.all()
-    else:
-        all_files = list(set(owned_files + shared_files + public_files))
-    
-    files_data = []
-    for file in all_files:
-        owner = User.query.get(file.owner_id)
-        file_type = 'own' if file.owner_id == current_user.id else \
-                   'shared' if file in shared_files else \
-                   'public' if file.is_public else \
-                   'admin_view'
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'error': '用户未找到'}), 404
         
-        files_data.append({
-            'id': file.id,
-            'path': file.path,
-            'size': file.size,
-            'modified': file.last_modified.isoformat(),
-            'owner': owner.email if owner else 'Unknown',
-            'type': file_type,
-            'is_public': file.is_public
-        })
-    
-    return jsonify(files_data)
+        # 查询用户可以访问的所有文件
+        owned_files = File.query.filter_by(owner_id=current_user.id).all()
+        shared_files = File.query.join(FileShare).filter(FileShare.user_id == current_user.id).all()
+        public_files = File.query.filter_by(is_public=True).all()
+        
+        # 如果是管理员，可以看到所有文件
+        if current_user.role == UserRole.ADMIN:
+            all_files = File.query.all()
+        else:
+            all_files = list(set(owned_files + shared_files + public_files))
+        
+        files_data = []
+        for file in all_files:
+            owner = User.query.get(file.owner_id)
+            file_type = 'own' if file.owner_id == current_user.id else \
+                       'shared' if file in shared_files else \
+                       'public' if file.is_public else \
+                       'admin_view'
+            
+            files_data.append({
+                'id': file.id,
+                'path': file.path,
+                'size': file.size,
+                'modified': file.last_modified.isoformat(),
+                'owner': owner.email if owner else 'Unknown',
+                'type': file_type,
+                'is_public': file.is_public
+            })
+        
+        return jsonify(files_data)
+    except Exception as e:
+        print(f"Error in list_files: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/upload', methods=['POST'])
 @jwt_required()
 def upload_file():
-    current_user = User.query.get(get_jwt_identity())
-    
-    if 'file' not in request.files:
-        return jsonify({'error': '没有文件被上传'}), 400
+    try:
+        logger.info("开始处理文件上传请求")
+        current_user = get_current_user()
+        if not current_user:
+            logger.error("用户未找到")
+            return jsonify({'error': '用户未找到'}), 404
         
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': '没有选择文件'}), 400
+        logger.info(f"当前用户: {current_user.email}")
         
-    if file:
-        # 检查文件大小和存储限制
-        file_size = len(file.read())
-        file.seek(0)  # 重置文件指针
-        
-        if current_user.storage_used + file_size > current_user.storage_limit:
-            return jsonify({'error': '存储空间不足'}), 400
+        if 'file' not in request.files:
+            logger.error("请求中没有文件")
+            return jsonify({'error': '没有文件被上传'}), 400
             
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(file_path)
-        
-        stat = os.stat(file_path)
-        with open(file_path, 'rb') as f:
-            file_hash = hashlib.sha256(f.read()).hexdigest()
+        file = request.files['file']
+        if file.filename == '':
+            logger.error("文件名为空")
+            return jsonify({'error': '没有选择文件'}), 400
             
-        new_file = File(
-            path=filename,
-            hash=file_hash,
-            last_modified=datetime.fromtimestamp(stat.st_mtime),
-            size=stat.st_size,
-            owner_id=current_user.id
-        )
+        if file:
+            logger.info(f"准备上传文件: {file.filename}")
+            # 检查文件大小和存储限制
+            file_size = len(file.read())
+            file.seek(0)  # 重置文件指针
+            
+            logger.info(f"文件大小: {file_size}, 当前已用空间: {current_user.storage_used}, 存储限制: {current_user.storage_limit}")
+            
+            if current_user.storage_used + file_size > current_user.storage_limit:
+                logger.error("存储空间不足")
+                return jsonify({'error': '存储空间不足'}), 400
+                
+            filename = secure_filename(file.filename)
+            logger.info(f"安全文件名: {filename}")
+            
+            # 确保上传目录存在
+            os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+            
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
+            logger.info(f"文件保存路径: {file_path}")
+            
+            try:
+                file.save(file_path)
+                logger.info("文件保存成功")
+            except Exception as e:
+                logger.error(f"文件保存失败: {str(e)}")
+                return jsonify({'error': f'文件保存失败: {str(e)}'}), 500
+            
+            try:
+                stat = os.stat(file_path)
+                with open(file_path, 'rb') as f:
+                    file_hash = hashlib.sha256(f.read()).hexdigest()
+                    
+                logger.info(f"文件哈希值: {file_hash}")
+                    
+                new_file = File(
+                    path=filename,
+                    hash=file_hash,
+                    last_modified=datetime.fromtimestamp(stat.st_mtime),
+                    size=stat.st_size,
+                    owner_id=current_user.id
+                )
+                
+                # 更新用户已使用的存储空间
+                current_user.storage_used += stat.st_size
+                
+                db.session.add(new_file)
+                db.session.commit()
+                logger.info("文件信息保存到数据库成功")
+                
+                return jsonify({
+                    'message': '文件上传成功',
+                    'file': {
+                        'id': new_file.id,
+                        'path': new_file.path,
+                        'size': new_file.size,
+                        'modified': new_file.last_modified.isoformat(),
+                        'owner': current_user.email,
+                        'type': 'own',
+                        'is_public': new_file.is_public
+                    }
+                })
+            except Exception as e:
+                logger.error(f"数据库操作失败: {str(e)}")
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    logger.info("已删除已上传的文件")
+                db.session.rollback()
+                return jsonify({'error': f'保存文件信息失败: {str(e)}'}), 500
         
-        # 更新用户已使用的存储空间
-        current_user.storage_used += stat.st_size
+        logger.error("文件上传失败：未知原因")
+        return jsonify({'error': '文件上传失败'}), 400
         
-        db.session.add(new_file)
-        db.session.commit()
-        
-        return jsonify({'message': '文件上传成功'})
-    
-    return jsonify({'error': '文件上传失败'}), 400
+    except Exception as e:
+        logger.error(f"文件上传过程中发生错误: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': f'文件上传失败: {str(e)}'}), 500
 
 @app.route('/api/download/<path:filename>')
 @jwt_required()
@@ -458,33 +550,40 @@ class ClipboardItem(db.Model):
 @app.route('/api/clipboard', methods=['GET'])
 @jwt_required()
 def list_clipboard_items():
-    current_user = User.query.get(get_jwt_identity())
-    items = ClipboardItem.query.filter_by(owner_id=current_user.id).order_by(ClipboardItem.id.desc()).all()
-    result = []
-    for item in items:
-        try:
-            if item.type in ['text', 'code']:
-                decrypted_content = crypto.decrypt(item.content)
-                content = decrypted_content.decode('utf-8')
-            else:
-                content = item.content
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'error': '用户未找到'}), 404
             
-            result.append({
-                'id': item.id,
-                'content': content,
-                'type': item.type,
-                'created_at': item.created_at.strftime('%Y-%m-%d %H:%M:%S')
-            })
-        except Exception as e:
-            print(f"解密错误: {str(e)}")  # 调试日志
-            result.append({
-                'id': item.id,
-                'content': '解密失败',
-                'type': item.type,
-                'created_at': item.created_at.strftime('%Y-%m-%d %H:%M:%S')
-            })
-    
-    return jsonify(result)
+        items = ClipboardItem.query.filter_by(owner_id=current_user.id).order_by(ClipboardItem.id.desc()).all()
+        result = []
+        for item in items:
+            try:
+                if item.type in ['text', 'code']:
+                    decrypted_content = crypto.decrypt(item.content)
+                    content = decrypted_content.decode('utf-8')
+                else:
+                    content = item.content
+                
+                result.append({
+                    'id': item.id,
+                    'content': content,
+                    'type': item.type,
+                    'created_at': item.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                })
+            except Exception as e:
+                print(f"解密错误: {str(e)}")  # 调试日志
+                result.append({
+                    'id': item.id,
+                    'content': '解密失败',
+                    'type': item.type,
+                    'created_at': item.created_at.strftime('%Y-%m-%d %H:%M:%S')
+                })
+        
+        return jsonify(result)
+    except Exception as e:
+        print(f"Error in list_clipboard_items: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/clipboard', methods=['POST'])
 @jwt_required()
@@ -505,15 +604,15 @@ def create_clipboard_item():
             os.makedirs(image_dir, exist_ok=True)
             
             # 读取文件内容并加密
-            file_content = file.read()
-            encrypted_content = crypto.encrypt(file_content)
+            file_content = file.read()  # 已经是bytes类型
+            encrypted_content = crypto.encrypt(file_content)  # 返回bytes类型
             
-            # 生成唯一文件名并规范化路径
+            # 生成唯一文件名
             timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
             filename = f"{timestamp}_{secure_filename(file.filename)}.enc"
-            file_path = os.path.normpath(os.path.join(image_dir, filename))
+            file_path = os.path.join(image_dir, filename)
             
-            # 写入加密后的二进制内容
+            # 直接写入加密后的二进制内容
             with open(file_path, 'wb') as f:
                 f.write(encrypted_content)
             
@@ -595,9 +694,9 @@ def delete_clipboard_item(item_id):
 @jwt_required()
 def get_clipboard_image(item_id):
     try:
-        current_user = User.query.get(get_jwt_identity())
+        current_user = get_current_user()
         if not current_user:
-            return jsonify({'error': '用户不存在'}), 401
+            return jsonify({'error': '用户未找到'}), 404
 
         item = ClipboardItem.query.get_or_404(item_id)
         
@@ -607,24 +706,24 @@ def get_clipboard_image(item_id):
         if item.type != 'image' or not item.image_path:
             return jsonify({'error': '图片不存在'}), 404
             
-        file_path = os.path.normpath(os.path.join(UPLOAD_FOLDER, 'clipboard_images', item.image_path))
+        file_path = os.path.join(UPLOAD_FOLDER, 'clipboard_images', item.image_path)
         if not os.path.exists(file_path):
             return jsonify({'error': '图片文件不存在'}), 404
 
         # 读取加密的图片内容
         with open(file_path, 'rb') as f:
-            encrypted_content = f.read()
+            encrypted_content = f.read()  # 读取为bytes类型
         
         # 解密图片内容
         try:
-            decrypted_content = crypto.decrypt(encrypted_content)
+            decrypted_content = crypto.decrypt(encrypted_content)  # 返回bytes类型
             if not decrypted_content:
                 raise Exception('解密后的内容为空')
                 
             # 返回解密后的图片
             return send_file(
                 io.BytesIO(decrypted_content),
-                mimetype='image/png',  # 统一使用 PNG 格式
+                mimetype='image/*',
                 as_attachment=False
             )
         except Exception as e:
@@ -666,32 +765,39 @@ def reset_password(user_id):
 @app.route('/api/clipboard/<int:item_id>')
 @jwt_required()
 def get_clipboard_item(item_id):
-    current_user = User.query.get(get_jwt_identity())
-    item = ClipboardItem.query.get_or_404(item_id)
-    
-    if item.owner_id != current_user.id:
-        return jsonify({'error': '没有权限访问此内容'}), 403
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'error': '用户未找到'}), 404
+            
+        item = ClipboardItem.query.get_or_404(item_id)
         
-    if item.type == 'image':
-        # 读取并解密图片
-        file_path = os.path.join(UPLOAD_FOLDER, 'clipboard_images', item.image_path)
-        with open(file_path, 'rb') as f:
-            encrypted_content = f.read().decode()
-        decrypted_content = crypto.decrypt(encrypted_content)
-        return send_file(
-            io.BytesIO(decrypted_content),
-            mimetype='image/*',
-            as_attachment=False
-        )
-    else:
-        # 解密文本内容
-        decrypted_content = crypto.decrypt(item.content).decode()
-        return jsonify({
-            'id': item.id,
-            'content': decrypted_content,
-            'type': item.type,
-            'created_at': item.created_at.isoformat()
-        })
+        if item.owner_id != current_user.id:
+            return jsonify({'error': '没有权限访问此内容'}), 403
+            
+        if item.type == 'image':
+            # 读取并解密图片
+            file_path = os.path.join(UPLOAD_FOLDER, 'clipboard_images', item.image_path)
+            with open(file_path, 'rb') as f:
+                encrypted_content = f.read()
+            decrypted_content = crypto.decrypt(encrypted_content)
+            return send_file(
+                io.BytesIO(decrypted_content),
+                mimetype='image/*',
+                as_attachment=False
+            )
+        else:
+            # 解密文本内容
+            decrypted_content = crypto.decrypt(item.content).decode()
+            return jsonify({
+                'id': item.id,
+                'content': decrypted_content,
+                'type': item.type,
+                'created_at': item.created_at.isoformat()
+            })
+    except Exception as e:
+        print(f"Error in get_clipboard_item: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     init_upload_folder()

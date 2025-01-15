@@ -18,9 +18,11 @@ const UploadForm = () => {
       setUploading(true);
       setUploadStatus({ show: true, success: true, text: '正在上传...' });
       
+      const token = localStorage.getItem('token');
       await axios.post('http://localhost:5002/api/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`
         },
         timeout: 30000, // 30秒超时
         onUploadProgress: (progressEvent) => {

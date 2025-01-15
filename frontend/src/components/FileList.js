@@ -16,7 +16,12 @@ const FileList = ({ currentUser }) => {
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get('http://localhost:5002/api/users');
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://localhost:5002/api/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       setUsers(response.data.filter(user => user.id !== currentUser.id));
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -26,7 +31,12 @@ const FileList = ({ currentUser }) => {
   const fetchFiles = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5002/api/files');
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://localhost:5002/api/files', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       setFiles(response.data);
     } catch (error) {
       console.error('Error fetching files:', error);
@@ -44,8 +54,12 @@ const FileList = ({ currentUser }) => {
 
   const handleDownload = async (path, owner) => {
     try {
+      const token = localStorage.getItem('token');
       const response = await axios.get(`http://localhost:5002/api/download/${path}`, {
-        responseType: 'blob'
+        responseType: 'blob',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -100,7 +114,12 @@ const FileList = ({ currentUser }) => {
 
   const handleDelete = async (file) => {
     try {
-      await axios.delete(`http://localhost:5002/api/files/${file.id}`);
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://localhost:5002/api/files/${file.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       message.success('文件删除成功');
       fetchFiles();
     } catch (error) {
