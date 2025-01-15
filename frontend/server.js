@@ -2,9 +2,23 @@ const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const path = require('path');
 const cors = require('cors');
+const dotenv = require('dotenv');
+
+// 加载环境变量
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// 从环境变量获取后端地址，默认使用本地地址
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:5002';
+
+// 输出环境变量加载信息
+console.log('环境变量配置:', {
+  NODE_ENV: process.env.NODE_ENV,
+  PORT: PORT,
+  BACKEND_URL: BACKEND_URL
+});
 
 // 启用 CORS
 app.use(cors({
@@ -20,7 +34,7 @@ app.use((req, res, next) => {
 
 // API 请求代理
 const apiProxy = createProxyMiddleware({
-  target: 'http://127.0.0.1:5002',
+  target: BACKEND_URL,
   changeOrigin: true,
   secure: false,
   ws: true,
@@ -29,7 +43,11 @@ const apiProxy = createProxyMiddleware({
     '^/api': '/api'  // 保持 /api 前缀
   },
   onProxyReq: (proxyReq, req, res) => {
+    // 添加必要的请求头
+    proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+    proxyReq.setHeader('X-Forwarded-Proto', req.protocol);
     console.log('代理请求:', req.method, req.path, '->', proxyReq.path);
+    console.log('目标服务器:', BACKEND_URL);
   },
   onProxyRes: (proxyRes, req, res) => {
     console.log('代理响应:', req.method, req.path, '->', proxyRes.statusCode);
@@ -67,13 +85,10 @@ app.get('*', (req, res) => {
 // 启动服务器
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`服务器启动于: http://localhost:${PORT}`);
+  console.log(`后端服务器地址: ${BACKEND_URL}`);
   console.log(`当前时间: ${new Date().toISOString()}`);
   console.log(`Node.js 版本: ${process.version}`);
   console.log(`工作目录: ${process.cwd()}`);
-  console.log('代理配置:', {
-    target: 'http://127.0.0.1:5002',
-    pathRewrite: '保持 /api 前缀'
-  });
 });
 
 // 处理服务器错误
