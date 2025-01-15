@@ -102,19 +102,51 @@ class FileChangeHandler(FileSystemEventHandler):
     def on_modified(self, event):
         if not event.is_directory:
             with self.app_context:
-                update_file_info(event.src_path)
-                # 发送文件更新事件
-                self.socketio.emit('files_updated', {'message': '文件已更新'})
+                # 检查文件是否真的发生了变化
+                file_path = event.src_path
+                rel_path = os.path.relpath(file_path, UPLOAD_FOLDER)
+                file_record = File.query.filter_by(path=rel_path).first()
+                
+                if file_record:
+                    # 获取文件当前状态
+                    stat = os.stat(file_path)
+                    current_size = stat.st_size
+                    current_mtime = datetime.fromtimestamp(stat.st_mtime)
+                    
+                    # 只有当文件大小或修改时间发生变化时才更新
+                    if current_size != file_record.size or current_mtime != file_record.last_modified:
+                        update_file_info(event.src_path)
+                        # 发送文件更新事件
+                        self.socketio.emit('files_updated', {'message': '文件已更新'})
+                else:
+                    # 如果是新文件，则更新并发送通知
+                    update_file_info(event.src_path)
+                    self.socketio.emit('files_updated', {'message': '新文件已添加'})
 
     def on_created(self, event):
         if not event.is_directory:
             with self.app_context:
-                update_file_info(event.src_path)
-                self.socketio.emit('files_updated', {'message': '新文件已添加'})
+                # 检查文件是否已存在于数据库中
+                file_path = event.src_path
+                rel_path = os.path.relpath(file_path, UPLOAD_FOLDER)
+                file_record = File.query.filter_by(path=rel_path).first()
+                
+                if not file_record:
+                    update_file_info(event.src_path)
+                    self.socketio.emit('files_updated', {'message': '新文件已添加'})
 
     def on_deleted(self, event):
         if not event.is_directory:
-            self.socketio.emit('files_updated', {'message': '文件已删除'})
+            with self.app_context:
+                # 检查文件是否存在于数据库中
+                file_path = event.src_path
+                rel_path = os.path.relpath(file_path, UPLOAD_FOLDER)
+                file_record = File.query.filter_by(path=rel_path).first()
+                
+                if file_record:
+                    db.session.delete(file_record)
+                    db.session.commit()
+                    self.socketio.emit('files_updated', {'message': '文件已删除'})
 
 def update_file_info(file_path):
     try:

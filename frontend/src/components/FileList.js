@@ -38,7 +38,10 @@ const FileList = ({ currentUser }) => {
 
     newSocket.on('files_updated', (data) => {
       console.log('Files updated:', data);
-      fetchFiles();  // 收到更新通知时重新获取文件列表
+      // 只在文件变更时才刷新列表
+      if (data.message === '文件已更新' || data.message === '新文件已添加' || data.message === '文件已删除') {
+        fetchFiles();  // 收到更新通知时重新获取文件列表
+      }
     });
 
     setSocket(newSocket);
