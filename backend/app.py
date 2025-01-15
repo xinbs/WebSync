@@ -773,6 +773,54 @@ def reset_password(user_id):
     
     return jsonify({'message': '密码重置成功'})
 
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@jwt_required()
+def delete_user(user_id):
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'error': '用户未找到'}), 404
+            
+        if current_user.role != UserRole.ADMIN:
+            return jsonify({'error': '只有管理员可以删除用户'}), 403
+            
+        target_user = User.query.get(user_id)
+        if not target_user:
+            return jsonify({'error': '要删除的用户不存在'}), 404
+            
+        if target_user.role == UserRole.ADMIN:
+            return jsonify({'error': '不能删除管理员账户'}), 403
+            
+        # 删除用户的文件
+        user_files = File.query.filter_by(owner_id=user_id).all()
+        for file in user_files:
+            file_path = os.path.join(UPLOAD_FOLDER, file.path)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            db.session.delete(file)
+            
+        # 删除用户的剪贴板内容
+        clipboard_items = ClipboardItem.query.filter_by(owner_id=user_id).all()
+        for item in clipboard_items:
+            if item.type == 'image' and item.image_path:
+                file_path = os.path.join(UPLOAD_FOLDER, 'clipboard_images', item.image_path)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            db.session.delete(item)
+            
+        # 删除用户的文件共享记录
+        FileShare.query.filter_by(user_id=user_id).delete()
+        FileShare.query.filter_by(created_by=user_id).delete()
+        
+        # 删除用户
+        db.session.delete(target_user)
+        db.session.commit()
+        
+        return jsonify({'message': '用户删除成功'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'删除用户失败: {str(e)}'}), 500
+
 @app.route('/api/clipboard/<int:item_id>')
 @jwt_required()
 def get_clipboard_item(item_id):
