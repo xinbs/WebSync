@@ -27,7 +27,8 @@ const FileList = ({ currentUser }) => {
 
   useEffect(() => {
     // 初始化 WebSocket 连接
-    const newSocket = io(window.location.origin, {
+    const newSocket = io({
+      autoConnect: true,
       path: '/socket.io',
       transports: ['websocket'],
       upgrade: false,
