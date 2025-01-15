@@ -945,17 +945,9 @@ if __name__ == '__main__':
     observer.start()
     
     try:
-        # 使用 gevent 运行 WebSocket 服务器
-        from gevent import pywsgi
-        from geventwebsocket.handler import WebSocketHandler
-        
-        # 允许所有来源的 WebSocket 连接
-        socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent', ping_timeout=60)
-        
-        # 监听所有地址
-        server = pywsgi.WSGIServer(('0.0.0.0', 5002), app, handler_class=WebSocketHandler)
+        # 使用 eventlet 运行服务器
         print('WebSync 服务已启动，监听地址：http://0.0.0.0:5002')
-        server.serve_forever()
+        socketio.run(app, host='0.0.0.0', port=5002, debug=False)
     finally:
         observer.stop()
         observer.join()
