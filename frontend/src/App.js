@@ -29,10 +29,11 @@ const App = () => {
     setLoading(false);
   }, []);
 
-  const handleAuthSuccess = (token, user) => {
-    localStorage.setItem('token', token);
+  const handleAuthSuccess = (data) => {
+    const { access_token, user } = data;
+    localStorage.setItem('token', access_token);
     localStorage.setItem('user', JSON.stringify(user));
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
     setUser(user);
     setIsAuthenticated(true);
   };

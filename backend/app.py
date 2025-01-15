@@ -12,6 +12,9 @@ import bcrypt
 from datetime import datetime, timedelta
 from enum import Enum
 from sqlalchemy import Enum as SQLEnum
+from crypto_utils import crypto  # 导入加密工具
+import base64
+import io
 
 app = Flask(__name__)
 CORS(app)
@@ -445,7 +448,7 @@ class ClipboardItem(db.Model):
     __tablename__ = 'clipboard_items'
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=True)  # 文本内容
-    type = db.Column(db.String(10), nullable=False)  # text, image
+    type = db.Column(db.String(10), nullable=False)  # text, code, image
     image_path = db.Column(db.String(500), nullable=True)  # 图片路径
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -485,14 +488,18 @@ def create_clipboard_item():
             image_dir = os.path.join(UPLOAD_FOLDER, 'clipboard_images')
             os.makedirs(image_dir, exist_ok=True)
             
+            # 读取文件内容并加密
+            file_content = file.read()
+            encrypted_content = crypto.encrypt(file_content)
+            
             # 生成唯一文件名
             timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-            filename = f"{timestamp}_{secure_filename(file.filename)}"
+            filename = f"{timestamp}_{secure_filename(file.filename)}.enc"
             file_path = os.path.join(image_dir, filename)
             
-            # 保存图片
-            file.save(file_path)
-            print(f"Saved image to: {file_path}")  # 调试日志
+            # 保存加密后的内容
+            with open(file_path, 'wb') as f:
+                f.write(base64.b64decode(encrypted_content.encode()))
             
             # 创建记录
             item = ClipboardItem(
@@ -510,19 +517,21 @@ def create_clipboard_item():
                 'image_path': filename,
                 'created_at': item.created_at.isoformat()
             }), 201
-            
         except Exception as e:
-            print(f"Error saving image: {e}")  # 调试日志
+            print(f"Error saving encrypted image: {e}")  # 调试日志
             db.session.rollback()
-            return jsonify({'error': f'保存图片失败: {str(e)}'}), 500
-            
+            return jsonify({'error': f'保存加密图片失败: {str(e)}'}), 500
+
     else:  # 处理文本
         data = request.get_json()
         if not data or 'content' not in data:
             return jsonify({'error': '缺少内容'}), 400
             
+        # 加密文本内容
+        encrypted_content = crypto.encrypt(data['content'])
+        
         item = ClipboardItem(
-            content=data['content'],
+            content=encrypted_content,
             type=data.get('type', 'text'),
             owner_id=current_user.id
         )
@@ -532,7 +541,7 @@ def create_clipboard_item():
         
         return jsonify({
             'id': item.id,
-            'content': item.content,
+            'content': data['content'],  # 返回原始内容
             'type': item.type,
             'created_at': item.created_at.isoformat()
         }), 201
@@ -580,8 +589,18 @@ def get_clipboard_image(item_id):
         if not os.path.exists(file_path):
             return jsonify({'error': '图片文件不存在'}), 404
 
+        # 读取加密的图片内容
+        with open(file_path, 'rb') as f:
+            encrypted_content = base64.b64encode(f.read()).decode()
+        
+        # 解密图片内容
+        decrypted_content = crypto.decrypt(encrypted_content)
+        if not decrypted_content:
+            return jsonify({'error': '图片解密失败'}), 500
+
+        # 返回解密后的图片
         return send_file(
-            file_path,
+            io.BytesIO(decrypted_content),
             mimetype='image/*',
             as_attachment=False
         )
@@ -616,6 +635,36 @@ def reset_password(user_id):
     db.session.commit()
     
     return jsonify({'message': '密码重置成功'})
+
+@app.route('/api/clipboard/<int:item_id>')
+@jwt_required()
+def get_clipboard_item(item_id):
+    current_user = User.query.get(get_jwt_identity())
+    item = ClipboardItem.query.get_or_404(item_id)
+    
+    if item.owner_id != current_user.id:
+        return jsonify({'error': '没有权限访问此内容'}), 403
+        
+    if item.type == 'image':
+        # 读取并解密图片
+        file_path = os.path.join(UPLOAD_FOLDER, 'clipboard_images', item.image_path)
+        with open(file_path, 'rb') as f:
+            encrypted_content = base64.b64encode(f.read()).decode()
+        decrypted_content = crypto.decrypt(encrypted_content)
+        return send_file(
+            io.BytesIO(decrypted_content),
+            mimetype='image/*',
+            as_attachment=False
+        )
+    else:
+        # 解密文本内容
+        decrypted_content = crypto.decrypt(item.content).decode()
+        return jsonify({
+            'id': item.id,
+            'content': decrypted_content,
+            'type': item.type,
+            'created_at': item.created_at.isoformat()
+        })
 
 if __name__ == '__main__':
     init_upload_folder()

@@ -15,9 +15,6 @@ const Auth = ({ onAuthSuccess }) => {
       const response = await axios.post('http://localhost:5002/api/login', values);
       const { access_token, user } = response.data;
       
-      localStorage.setItem('token', access_token);
-      localStorage.setItem('user', JSON.stringify(user));
-      
       onAuthSuccess(response.data);
       message.success('登录成功');
     } catch (error) {
