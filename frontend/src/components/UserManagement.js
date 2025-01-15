@@ -18,7 +18,7 @@ const UserManagement = ({ currentUser }) => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5002/api/users');
+      const response = await axios.get('/api/users');
       setUsers(response.data);
     } catch (error) {
       message.error('获取用户列表失败');
@@ -59,11 +59,11 @@ const UserManagement = ({ currentUser }) => {
       
       if (editingUser) {
         // 编辑用户
-        await axios.put(`http://localhost:5002/api/users/${editingUser.id}`, values);
+        await axios.put(`/api/users/${editingUser.id}`, values);
         message.success('用户更新成功');
       } else {
         // 创建新用户
-        await axios.post('http://localhost:5002/api/register', values);
+        await axios.post('/api/register', values);
         message.success('用户创建成功');
       }
       setModalVisible(false);
@@ -80,7 +80,7 @@ const UserManagement = ({ currentUser }) => {
     }
 
     try {
-      await axios.delete(`http://localhost:5002/api/users/${user.id}`);
+      await axios.delete(`/api/users/${user.id}`);
       message.success('用户删除成功');
       fetchUsers();
     } catch (error) {
@@ -110,7 +110,7 @@ const UserManagement = ({ currentUser }) => {
   const handleResetPasswordOk = async () => {
     try {
       const values = await resetPasswordForm.validateFields();
-      await axios.post(`http://localhost:5002/api/users/${resettingUser.id}/reset-password`, {
+      await axios.post(`/api/users/${resettingUser.id}/reset-password`, {
         new_password: values.new_password
       });
       message.success('密码重置成功');

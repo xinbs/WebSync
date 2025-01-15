@@ -827,8 +827,8 @@ if __name__ == '__main__':
     observer.start()
     
     try:
-        # 允许从本地任意地址访问
-        app.run(host='0.0.0.0', port=5002, debug=True)
+        # 只监听本地地址，增加安全性
+        app.run(host='127.0.0.1', port=5002, debug=False)
     finally:
         observer.stop()
         observer.join()

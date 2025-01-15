@@ -12,7 +12,7 @@ const Auth = ({ onAuthSuccess }) => {
   const handleLogin = async (values) => {
     try {
       setLoading(true);
-      const response = await axios.post('http://localhost:5002/api/login', values);
+      const response = await axios.post('/api/login', values);
       const { access_token, user } = response.data;
       
       onAuthSuccess(response.data);

@@ -18,7 +18,7 @@ const Clipboard = () => {
   const fetchItems = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5002/api/clipboard');
+      const response = await axios.get('/api/clipboard');
       setItems(response.data);
     } catch (error) {
       message.error('获取剪贴板内容失败');
@@ -36,7 +36,7 @@ const Clipboard = () => {
     items.forEach(item => {
       if (item.type === 'image') {
         const token = localStorage.getItem('token');
-        axios.get(`http://localhost:5002/api/clipboard/image/${item.id}`, {
+        axios.get(`/api/clipboard/image/${item.id}`, {
           responseType: 'blob',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -85,7 +85,7 @@ const Clipboard = () => {
       
       try {
         setLoading(true);
-        const response = await axios.post('http://localhost:5002/api/clipboard', formData, {
+        const response = await axios.post('/api/clipboard', formData, {
           headers: {
             'Content-Type': 'multipart/form-data'
           }
@@ -108,7 +108,7 @@ const Clipboard = () => {
       try {
         setLoading(true);
         const isCode = /[{}\[\]()=>;]|function|class|import|export|const|let|var/.test(text);
-        await axios.post('http://localhost:5002/api/clipboard', {
+        await axios.post('/api/clipboard', {
           content: text,
           type: isCode ? 'code' : 'text'
         });
@@ -125,7 +125,7 @@ const Clipboard = () => {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`http://localhost:5002/api/clipboard/${id}`);
+      await axios.delete(`/api/clipboard/${id}`);
       message.success('删除成功');
       fetchItems();
     } catch (error) {
@@ -153,7 +153,7 @@ const Clipboard = () => {
     try {
       // 检测是否为代码
       const isCode = /[{}\[\]()=>;]|function|class|import|export|const|let|var/.test(inputText);
-      await axios.post('http://localhost:5002/api/clipboard', {
+      await axios.post('/api/clipboard', {
         content: inputText,
         type: isCode ? 'code' : 'text'
       });
