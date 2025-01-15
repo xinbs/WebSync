@@ -50,3 +50,7 @@ uploads/
 **/uploads/
 backend/uploads/
 backend/uploads/**/*
+
+# Encryption key
+backend/encryption.key
+**/encryption.key

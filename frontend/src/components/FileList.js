@@ -100,7 +100,7 @@ const FileList = ({ currentUser }) => {
 
   const handleDelete = async (file) => {
     try {
-      await axios.delete(`http://localhost:5001/api/files/${file.id}`);
+      await axios.delete(`http://localhost:5002/api/files/${file.id}`);
       message.success('文件删除成功');
       fetchFiles();
     } catch (error) {

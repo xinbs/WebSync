@@ -457,18 +457,32 @@ class ClipboardItem(db.Model):
 @jwt_required()
 def list_clipboard_items():
     current_user = User.query.get(get_jwt_identity())
-    items = ClipboardItem.query.filter_by(owner_id=current_user.id)\
-        .order_by(ClipboardItem.created_at.desc())\
-        .limit(50)\
-        .all()
+    items = ClipboardItem.query.filter_by(owner_id=current_user.id).order_by(ClipboardItem.id.desc()).all()
+    result = []
+    for item in items:
+        try:
+            if item.type in ['text', 'code']:
+                decrypted_content = crypto.decrypt(item.content)
+                content = decrypted_content.decode('utf-8')
+            else:
+                content = item.content
+            
+            result.append({
+                'id': item.id,
+                'content': content,
+                'type': item.type,
+                'created_at': item.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            })
+        except Exception as e:
+            print(f"解密错误: {str(e)}")  # 调试日志
+            result.append({
+                'id': item.id,
+                'content': '解密失败',
+                'type': item.type,
+                'created_at': item.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            })
     
-    return jsonify([{
-        'id': item.id,
-        'content': item.content,
-        'type': item.type,
-        'image_path': item.image_path if item.type == 'image' else None,
-        'created_at': item.created_at.isoformat()
-    } for item in items])
+    return jsonify(result)
 
 @app.route('/api/clipboard', methods=['POST'])
 @jwt_required()
@@ -489,17 +503,17 @@ def create_clipboard_item():
             os.makedirs(image_dir, exist_ok=True)
             
             # 读取文件内容并加密
-            file_content = file.read()
-            encrypted_content = crypto.encrypt(file_content)
+            file_content = file.read()  # 已经是bytes类型
+            encrypted_content = crypto.encrypt(file_content)  # 返回bytes类型
             
             # 生成唯一文件名
             timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
             filename = f"{timestamp}_{secure_filename(file.filename)}.enc"
             file_path = os.path.join(image_dir, filename)
             
-            # 保存加密后的内容
+            # 直接写入加密后的二进制内容
             with open(file_path, 'wb') as f:
-                f.write(base64.b64decode(encrypted_content.encode()))
+                f.write(encrypted_content)
             
             # 创建记录
             item = ClipboardItem(
@@ -517,6 +531,7 @@ def create_clipboard_item():
                 'image_path': filename,
                 'created_at': item.created_at.isoformat()
             }), 201
+            
         except Exception as e:
             print(f"Error saving encrypted image: {e}")  # 调试日志
             db.session.rollback()
@@ -527,24 +542,29 @@ def create_clipboard_item():
         if not data or 'content' not in data:
             return jsonify({'error': '缺少内容'}), 400
             
-        # 加密文本内容
-        encrypted_content = crypto.encrypt(data['content'])
-        
-        item = ClipboardItem(
-            content=encrypted_content,
-            type=data.get('type', 'text'),
-            owner_id=current_user.id
-        )
-        
-        db.session.add(item)
-        db.session.commit()
-        
-        return jsonify({
-            'id': item.id,
-            'content': data['content'],  # 返回原始内容
-            'type': item.type,
-            'created_at': item.created_at.isoformat()
-        }), 201
+        try:
+            # 加密文本内容
+            encrypted_content = crypto.encrypt(data['content'])
+            
+            item = ClipboardItem(
+                content=encrypted_content,  # 直接存储加密后的内容
+                type=data.get('type', 'text'),
+                owner_id=current_user.id
+            )
+            
+            db.session.add(item)
+            db.session.commit()
+            
+            return jsonify({
+                'id': item.id,
+                'content': data['content'],  # 返回原始内容
+                'type': item.type,
+                'created_at': item.created_at.isoformat()
+            }), 201
+        except Exception as e:
+            print(f"Error saving encrypted text: {e}")  # 调试日志
+            db.session.rollback()
+            return jsonify({'error': f'保存加密文本失败: {str(e)}'}), 500
 
 @app.route('/api/clipboard/<int:item_id>', methods=['DELETE'])
 @jwt_required()
@@ -589,23 +609,28 @@ def get_clipboard_image(item_id):
         if not os.path.exists(file_path):
             return jsonify({'error': '图片文件不存在'}), 404
 
-        # 读取加密的图片内容
+        # 读取加密的图片内容（二进制）
         with open(file_path, 'rb') as f:
-            encrypted_content = base64.b64encode(f.read()).decode()
+            encrypted_content = f.read()  # 读取为bytes类型
         
         # 解密图片内容
-        decrypted_content = crypto.decrypt(encrypted_content)
-        if not decrypted_content:
+        try:
+            decrypted_content = crypto.decrypt(encrypted_content)  # 返回bytes类型
+            if not decrypted_content:
+                raise Exception('解密后的内容为空')
+                
+            # 返回解密后的图片
+            return send_file(
+                io.BytesIO(decrypted_content),
+                mimetype='image/*',
+                as_attachment=False
+            )
+        except Exception as e:
+            print(f"图片解密错误: {str(e)}")  # 调试日志
             return jsonify({'error': '图片解密失败'}), 500
-
-        # 返回解密后的图片
-        return send_file(
-            io.BytesIO(decrypted_content),
-            mimetype='image/*',
-            as_attachment=False
-        )
+            
     except Exception as e:
-        print(f"Error sending file: {e}")  # 调试日志
+        print(f"读取图片错误: {str(e)}")  # 调试日志
         return jsonify({'error': '读取图片失败'}), 500
 
 @app.route('/api/users/<int:user_id>/reset-password', methods=['POST'])
@@ -649,7 +674,7 @@ def get_clipboard_item(item_id):
         # 读取并解密图片
         file_path = os.path.join(UPLOAD_FOLDER, 'clipboard_images', item.image_path)
         with open(file_path, 'rb') as f:
-            encrypted_content = base64.b64encode(f.read()).decode()
+            encrypted_content = f.read().decode()
         decrypted_content = crypto.decrypt(encrypted_content)
         return send_file(
             io.BytesIO(decrypted_content),

@@ -1,51 +1,38 @@
-from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
-from Crypto.Util.Padding import pad, unpad
-import base64
 import os
+from cryptography.fernet import Fernet
 
 class CryptoUtils:
     def __init__(self):
-        # 从环境变量获取密钥，如果不存在则生成新密钥
-        self.key = os.getenv('ENCRYPTION_KEY', '').encode() or get_random_bytes(32)
-        if len(self.key) != 32:
-            self.key = get_random_bytes(32)
+        self.key_file = 'encryption.key'
+        self.fernet = None
+        self._load_or_create_key()
+    
+    def _load_or_create_key(self):
+        try:
+            if os.path.exists(self.key_file):
+                with open(self.key_file, 'rb') as f:
+                    key = f.read()
+            else:
+                key = Fernet.generate_key()
+                with open(self.key_file, 'wb') as f:
+                    f.write(key)
+            self.fernet = Fernet(key)
+        except Exception as e:
+            print(f"Error handling encryption key: {e}")
+            raise
     
     def encrypt(self, data):
         if isinstance(data, str):
             data = data.encode()
-        
-        # 生成随机IV
-        iv = get_random_bytes(AES.block_size)
-        cipher = AES.new(self.key, AES.MODE_CBC, iv)
-        
-        # 加密数据
-        padded_data = pad(data, AES.block_size)
-        encrypted_data = cipher.encrypt(padded_data)
-        
-        # 组合IV和加密数据
-        combined = iv + encrypted_data
-        
-        # Base64编码
-        return base64.b64encode(combined).decode('utf-8')
+        return self.fernet.encrypt(data)
     
-    def decrypt(self, encrypted_data):
+    def decrypt(self, data):
         try:
-            # Base64解码
-            encrypted_bytes = base64.b64decode(encrypted_data.encode('utf-8'))
-            
-            # 分离IV和加密数据
-            iv = encrypted_bytes[:AES.block_size]
-            cipher_data = encrypted_bytes[AES.block_size:]
-            
-            # 解密
-            cipher = AES.new(self.key, AES.MODE_CBC, iv)
-            decrypted_data = unpad(cipher.decrypt(cipher_data), AES.block_size)
-            
-            return decrypted_data
+            if isinstance(data, str):
+                data = data.encode()
+            return self.fernet.decrypt(data)
         except Exception as e:
-            print(f"Decryption error: {str(e)}")
-            return None
+            print(f"Decryption error: {e}")
+            raise
 
-# 创建全局实例
 crypto = CryptoUtils() 
