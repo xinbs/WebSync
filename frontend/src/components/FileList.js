@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Select, message, Popconfirm, Tag, Space, Typography } from 'antd';
 import { DownloadOutlined, SyncOutlined, ShareAltOutlined, DeleteOutlined, GlobalOutlined, UserOutlined } from '@ant-design/icons';
 import axios from 'axios';
-import config from '../config';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -87,7 +86,7 @@ const FileList = ({ currentUser }) => {
     try {
       const values = await shareForm.validateFields();
       const token = localStorage.getItem('token');
-      await axios.post(`${config.apiBaseUrl}/api/files/${selectedFile.id}/share`, {
+      await axios.post(`/api/files/${selectedFile.id}/share`, {
         type: values.shareType,
         user_email: values.shareType === 'user' ? values.userEmail : undefined
       }, {
@@ -106,7 +105,7 @@ const FileList = ({ currentUser }) => {
   const handleUnshare = async (file, type, userEmail) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`${config.apiBaseUrl}/api/files/${file.id}/share`, {
+      await axios.delete(`/api/files/${file.id}/share`, {
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -125,7 +124,7 @@ const FileList = ({ currentUser }) => {
   const handleDelete = async (file) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`${config.apiBaseUrl}/api/files/${file.id}`, {
+      await axios.delete(`/api/files/${file.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

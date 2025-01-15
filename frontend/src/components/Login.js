@@ -1,6 +1,6 @@
 import React from 'react';
 import { Form, Input, Button, message } from 'antd';
-import axios from 'axios';
+import axios from '../utils/axios';
 
 const Login = ({ onLoginSuccess }) => {
   const handleLogin = async (values) => {
@@ -13,7 +13,6 @@ const Login = ({ onLoginSuccess }) => {
       onLoginSuccess(user);
     } catch (error) {
       console.error('Login error:', error);
-      message.error(error.response?.data?.error || '登录失败，请检查网络连接');
     }
   };
 
