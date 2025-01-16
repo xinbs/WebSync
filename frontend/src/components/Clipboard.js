@@ -202,7 +202,7 @@ const Clipboard = () => {
               alt="剪贴板图片"
               style={{ 
                 maxWidth: '100%',
-                maxHeight: '300px',
+                maxHeight: '500px',
                 cursor: 'pointer',
                 objectFit: 'contain'
               }}
@@ -313,7 +313,7 @@ const Clipboard = () => {
           }}>
             {item.type === 'code' ? (
               <div style={{
-                maxHeight: '300px',
+                maxHeight: '500px',
                 overflow: 'auto'
               }}>
                 <SyntaxHighlighter 
@@ -335,7 +335,7 @@ const Clipboard = () => {
                 backgroundColor: '#f5f5f5',
                 padding: '8px',
                 borderRadius: '4px',
-                maxHeight: '300px',
+                maxHeight: '500px',
                 overflow: 'auto'
               }}>
                 <Text>{item.content}</Text>
