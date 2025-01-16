@@ -9,6 +9,7 @@ import UserManagement from './components/UserManagement';
 import Clipboard from './components/Clipboard';
 import JsonFormatter from './components/JsonFormatter';
 import RegexTester from './components/RegexTester';
+import GrokDebugger from './components/GrokDebugger';
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -73,6 +74,11 @@ const App = () => {
       key: 'regex',
       label: '正则工具',
       children: <RegexTester />
+    },
+    {
+      key: 'grok',
+      label: 'Grok工具',
+      children: <GrokDebugger />
     }
   ];
 

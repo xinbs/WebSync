@@ -18,6 +18,7 @@ import base64
 import io
 import logging
 from dotenv import load_dotenv
+from routes.patterns import patterns_bp
 
 # 加载环境变量
 load_dotenv()
@@ -55,6 +56,9 @@ socketio = SocketIO(
     logger=True,
     engineio_logger=True
 )
+
+# 注册路由
+app.register_blueprint(patterns_bp, url_prefix='/api/patterns')
 
 @socketio.on('connect')
 def handle_connect():
