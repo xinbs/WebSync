@@ -256,14 +256,15 @@ const Clipboard = () => {
             paddingRight: '100px' // 为右侧按钮留出空间
           }}
         >
-          {/* 按钮组 */}
+          {/* 按钮组 - 竖直排列 */}
           <div style={{
             position: 'absolute',
-            top: 12,
+            top: 16,
             right: 16,
             zIndex: 1,
             display: 'flex',
-            gap: '4px',
+            flexDirection: 'column',
+            gap: '8px',
             padding: '4px',
             borderRadius: '4px',
             backgroundColor: 'rgba(255, 255, 255, 0.8)',
@@ -275,7 +276,10 @@ const Clipboard = () => {
               onClick={() => handleCopy(item.content)}
               style={{
                 color: '#000',
-                transition: 'all 0.3s'
+                transition: 'all 0.3s',
+                padding: '4px 8px',
+                height: 'auto',
+                minHeight: '32px'
               }}
               onMouseEnter={e => {
                 e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
@@ -292,7 +296,10 @@ const Clipboard = () => {
               icon={<DeleteOutlined />}
               onClick={() => handleDelete(item.id)}
               style={{
-                transition: 'all 0.3s'
+                transition: 'all 0.3s',
+                padding: '4px 8px',
+                height: 'auto',
+                minHeight: '32px'
               }}
               onMouseEnter={e => {
                 e.currentTarget.style.backgroundColor = 'rgba(255, 77, 79, 0.1)';
