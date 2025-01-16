@@ -8,6 +8,7 @@ import UploadForm from './components/UploadForm';
 import UserManagement from './components/UserManagement';
 import Clipboard from './components/Clipboard';
 import JsonFormatter from './components/JsonFormatter';
+import RegexTester from './components/RegexTester';
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -67,6 +68,11 @@ const App = () => {
       key: 'json',
       label: 'JSON工具',
       children: <JsonFormatter />
+    },
+    {
+      key: 'regex',
+      label: '正则工具',
+      children: <RegexTester />
     }
   ];
 
