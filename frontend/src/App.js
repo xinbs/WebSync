@@ -7,6 +7,7 @@ import FileList from './components/FileList';
 import UploadForm from './components/UploadForm';
 import UserManagement from './components/UserManagement';
 import Clipboard from './components/Clipboard';
+import JsonFormatter from './components/JsonFormatter';
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -61,6 +62,11 @@ const App = () => {
       key: 'clipboard',
       label: '粘贴板',
       children: <Clipboard />
+    },
+    {
+      key: 'json',
+      label: 'JSON工具',
+      children: <JsonFormatter />
     }
   ];
 
