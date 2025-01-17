@@ -136,11 +136,23 @@ const Clipboard = () => {
 
   const handleCopy = async (content) => {
     try {
+      // 主要复制方法
       await navigator.clipboard.writeText(content);
       message.success('已复制到剪贴板');
     } catch (error) {
-      message.error('复制失败');
-      console.error('Error copying to clipboard:', error);
+      // 备用复制方法
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = content;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        message.success('已复制到剪贴板');
+      } catch (fallbackError) {
+        message.error('复制失败');
+        console.error('Error copying to clipboard:', error, fallbackError);
+      }
     }
   };
 
@@ -221,7 +233,7 @@ const Clipboard = () => {
                     <body>
                       <img id="preview" src="" />
                       <script>
-                        fetch('http://localhost:5002/api/clipboard/image/${item.id}', {
+                        fetch('/api/clipboard/image/${item.id}', {
                           headers: {
                             'Authorization': 'Bearer ${token}'
                           }
@@ -229,6 +241,10 @@ const Clipboard = () => {
                         .then(response => response.blob())
                         .then(blob => {
                           document.getElementById('preview').src = URL.createObjectURL(blob);
+                        })
+                        .catch(error => {
+                          console.error('Error loading image:', error);
+                          document.body.innerHTML = '<div style="color: white; text-align: center;">加载图片失败</div>';
                         });
                       </script>
                     </body>
