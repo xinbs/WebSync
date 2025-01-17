@@ -5,6 +5,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import axios from 'axios';
 import { debounce } from 'lodash';
+import GrokCollection from './grok';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -20,6 +21,7 @@ const GrokDebugger = () => {
   const [patternFiles, setPatternFiles] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState(['grok-patterns']);
   const textAreaRef = useRef(null);
+  const grokInstance = useRef(new GrokCollection());
 
   // 加载 pattern 文件列表
   useEffect(() => {
@@ -33,109 +35,136 @@ const GrokDebugger = () => {
       });
   }, []);
 
-  // 解析 Grok 模式
-  const parseGrokPattern = useCallback((pattern) => {
-    if (!pattern) return '';
-    
-    const allPatterns = { ...grokPatterns, ...customPatterns };
-    let result = pattern;
-    let changed = true;
-    let iterations = 0;
-    const maxIterations = 20; // 减少最大迭代次数
-
+  // 修改模式文件加载逻辑
+  const loadPatternFiles = useCallback(async () => {
     try {
-      while (changed && iterations < maxIterations) {
-        changed = false;
-        iterations++;
-        
-        // 一次性替换所有模式，减少循环次数
-        const matches = [...result.matchAll(/%\{([^:}]+)(?::([^}]+))?\}/g)];
-        if (matches.length === 0) break;
-
-        for (const match of matches) {
-          const [fullMatch, key, name] = match;
-          const value = allPatterns[key];
+      // 重置 grok 实例
+      grokInstance.current = new GrokCollection();
+      
+      // 加载所有选中的模式文件
+      for (const file of selectedFiles) {
+        try {
+          console.log(`Loading patterns from ${file}...`);
+          const response = await axios.get(`/api/patterns/${file}`);
+          const patternsData = response.data;
           
-          if (!value) continue;
+          // 添加调试日志
+          console.log('Received patterns data:', {
+            type: typeof patternsData,
+            value: patternsData
+          });
           
-          if (name) {
-            result = result.replace(fullMatch, `(?<${name}>${value})`);
+          // 处理 JSON 格式的模式数据
+          if (typeof patternsData === 'object') {
+            // 注册所有模式
+            Object.entries(patternsData).forEach(([name, pattern]) => {
+              try {
+                grokInstance.current.createPattern(pattern, name);
+              } catch (e) {
+                console.error(`Failed to register pattern ${name}:`, e);
+              }
+            });
+            
+            // 更新建议列表
+            setGrokPatterns(prev => ({
+              ...prev,
+              ...patternsData
+            }));
           } else {
-            result = result.replace(fullMatch, `(?:${value})`);
+            // 如果是文本格式，使用原来的处理方式
+            const textContent = String(patternsData);
+            const ids = grokInstance.current.loadPatterns(textContent);
+            console.log(`Loaded patterns: ${ids}`);
+            
+            const patterns = {};
+            textContent.split('\n').forEach(line => {
+              const match = line.match(/^([A-Z0-9_]+)\s+(.+)/);
+              if (match) {
+                patterns[match[1]] = match[2];
+              }
+            });
+            
+            setGrokPatterns(prev => ({
+              ...prev,
+              ...patterns
+            }));
           }
-          changed = true;
+        } catch (error) {
+          console.error(`Failed to load pattern file ${file}:`, error);
+          message.error(`加载模式文件 ${file} 失败`);
+        }
+      }
+      
+      // 注册自定义模式
+      for (const [name, pattern] of Object.entries(customPatterns)) {
+        try {
+          grokInstance.current.createPattern(pattern, name);
+        } catch (e) {
+          console.error(`Failed to register custom pattern ${name}:`, e);
         }
       }
 
-      if (iterations >= maxIterations) {
-        console.warn('达到最大迭代次数，可能存在循环引用');
-      }
-
-      return result;
-    } catch (err) {
-      console.error('解析 Grok 模式错误:', err);
-      return pattern;
+      console.log('Grok patterns registration completed');
+      
+    } catch (error) {
+      console.error('Failed to initialize or load pattern files:', error);
+      message.error('初始化 Grok 解析器失败');
     }
-  }, [grokPatterns, customPatterns]);
+  }, [selectedFiles, customPatterns]);
 
-  // 优化执行匹配的逻辑
+  // 修改匹配逻辑
   const debouncedExecuteMatch = useCallback(
     debounce(() => {
-      if (!pattern || !testText) {
+      if (!pattern || !testText || !grokInstance.current) {
         setMatches([]);
         setError('');
         return;
       }
 
       try {
-        const parsedPattern = parseGrokPattern(pattern);
-        console.log('Final parsed pattern:', parsedPattern);
+        console.log('Current pattern:', pattern);
         
-        // 如果解析后的模式与原模式相同，说明没有匹配到任何 Grok 模式
-        if (parsedPattern === pattern && pattern.includes('%{')) {
-          setError('未找到匹配的 Grok 模式');
-          setMatches([]);
-          return;
-        }
-
-        const regex = new RegExp(parsedPattern);  // 移除 g 标志，每行只匹配一次
-        const results = [];
         const lines = testText.split('\n');
-        const maxLines = 1000; // 限制最大处理行数
+        const maxLines = 1000;
+        const results = [];
 
         if (lines.length > maxLines) {
           setError(`文本超过最大行数限制 (${maxLines} 行)`);
           return;
         }
 
-        // 按行处理文本
-        lines.forEach((line, lineNumber) => {
-          if (!line.trim()) return; // 跳过空行
+        const compiledPattern = grokInstance.current.createPattern(pattern);
+        if (!compiledPattern) {
+          setError('Grok 模式编译失败');
+          return;
+        }
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (!line.trim()) continue;
           
-          const match = line.match(regex);
-          if (match) {
-            if (match.groups) {
+          try {
+            console.log(`Matching line ${i + 1}:`, line);
+            const result = compiledPattern.parse(line);
+            console.log('Match result:', result);
+
+            if (result) {
               results.push({
-                fullMatch: match[0],
-                lineNumber: lineNumber + 1,
-                groups: Object.entries(match.groups)
-                  .filter(([_, value]) => value !== undefined)
+                fullMatch: line,
+                lineNumber: i + 1,
+                groups: Object.entries(result)
                   .map(([key, value]) => ({
                     name: key,
                     value: value,
-                    start: match.index + match[0].indexOf(value),
+                    start: line.indexOf(value),
                     length: value?.length || 0
                   }))
               });
-            } else {
-              results.push({
-                fullMatch: match[0],
-                lineNumber: lineNumber + 1,
-                groups: []
-              });
             }
+          } catch (e) {
+            console.error(`Line ${i + 1} match failed:`, e);
           }
-        });
+        }
 
         setMatches(results);
         setError(results.length === 0 ? '无匹配结果' : '');
@@ -145,41 +174,16 @@ const GrokDebugger = () => {
         setMatches([]);
       }
     }, 300),
-    [pattern, testText, parseGrokPattern]
+    [pattern, testText]
   );
-
-  // 优化模式文件加载
-  const loadPatternFiles = useCallback(async () => {
-    try {
-      const patterns = {};
-      const requests = selectedFiles.map(file => 
-        axios.get(`/api/patterns/${file}`)
-          .catch(error => {
-            console.error(`Failed to load pattern file ${file}:`, error);
-            return { data: {} };
-          })
-      );
-      
-      const responses = await Promise.all(requests);
-      responses.forEach(response => {
-        Object.assign(patterns, response.data);
-      });
-      
-      setGrokPatterns(patterns);
-    } catch (error) {
-      console.error('Failed to load pattern files:', error);
-      message.error('加载模式文件失败');
-    }
-  }, [selectedFiles]);
 
   // 优化建议列表获取
   const getSuggestions = useCallback((text) => {
     if (!text || text.length < 1) return [];
     
-    // 限制搜索范围，只在有限的模式中搜索
     return Object.entries(grokPatterns)
       .filter(([key]) => key.toLowerCase().includes(text.toLowerCase()))
-      .slice(0, 10) // 减少建议数量以提高性能
+      .slice(0, 10)
       .map(([key, value]) => ({
         value: key,
         label: (
@@ -198,14 +202,12 @@ const GrokDebugger = () => {
     const newValue = e.target.value;
     setPattern(newValue);
     
-    // 只在输入 %{ 后的情况下才触发建议
     const cursorPos = e.target.selectionStart;
     const textBeforeCursor = newValue.slice(0, cursorPos);
     const lastPercentBrace = textBeforeCursor.lastIndexOf('%{');
     
     if (lastPercentBrace !== -1 && cursorPos > lastPercentBrace) {
       const word = textBeforeCursor.slice(lastPercentBrace + 2);
-      // 只有当输入长度大于 1 时才显示建议
       if (word.length >= 1) {
         setSuggestions(getSuggestions(word));
       } else {
@@ -242,16 +244,24 @@ const GrokDebugger = () => {
     return () => debouncedExecuteMatch.cancel();
   }, [debouncedExecuteMatch]);
 
-  // 添加自定义模式
-  const addCustomPattern = () => {
+  // 修改添加自定义模式的逻辑
+  const addCustomPattern = async () => {
     const name = prompt('输入模式名称：');
     if (name) {
       const value = prompt('输入模式定义：');
       if (value) {
-        setCustomPatterns(prev => ({
-          ...prev,
-          [name]: value
-        }));
+        try {
+          const pattern = grokInstance.current.createPattern(value, name);
+          if (pattern) {
+            setCustomPatterns(prev => ({
+              ...prev,
+              [name]: value
+            }));
+          }
+        } catch (e) {
+          console.error(`Failed to register custom pattern ${name}:`, e);
+          message.error('添加自定义模式失败');
+        }
       }
     }
   };
