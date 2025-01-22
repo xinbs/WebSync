@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { List, Card, Button, message, Typography, Space, Image, Input } from 'antd';
-import { DeleteOutlined, CopyOutlined, SendOutlined } from '@ant-design/icons';
+import { List, Card, Button, message, Typography, Space, Image, Input, Popconfirm } from 'antd';
+import { DeleteOutlined, CopyOutlined, SendOutlined, SyncOutlined } from '@ant-design/icons';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import axios from 'axios';
@@ -178,6 +178,11 @@ const Clipboard = () => {
     }
   };
 
+  const handleRefresh = () => {
+    fetchItems();
+    message.success('刷新成功');
+  };
+
   const renderItem = (item) => {
     if (item.type === 'image') {
       return (
@@ -261,7 +266,25 @@ const Clipboard = () => {
     }
 
     return (
-      <List.Item>
+      <List.Item
+        key={item.id}
+        actions={[
+          <Popconfirm
+            title="确定要删除这条记录吗？"
+            onConfirm={() => handleDelete(item.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button 
+              type="text" 
+              danger
+              icon={<DeleteOutlined />}
+            >
+              删除
+            </Button>
+          </Popconfirm>
+        ]}
+      >
         <Card 
           style={{ 
             width: '100%',
@@ -305,26 +328,6 @@ const Clipboard = () => {
               }}
             >
               复制
-            </Button>
-            <Button
-              type="text"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDelete(item.id)}
-              style={{
-                transition: 'all 0.3s',
-                padding: '4px 8px',
-                height: 'auto',
-                minHeight: '32px'
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 77, 79, 0.1)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              删除
             </Button>
           </div>
 
@@ -420,6 +423,16 @@ const Clipboard = () => {
         bordered={false}
         autoSize={{ minRows: 4 }}
       />
+
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button 
+          icon={<SyncOutlined />} 
+          onClick={handleRefresh}
+          loading={loading}
+        >
+          刷新列表
+        </Button>
+      </div>
 
       <List
         loading={loading}
