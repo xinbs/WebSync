@@ -163,11 +163,24 @@ const Clipboard = () => {
     }
 
     try {
-      // 检测是否为代码
-      const isCode = /[{}\[\]()=>;]|function|class|import|export|const|let|var/.test(inputText);
+      // 检测是否为JSON格式
+      let isJson = false;
+      let formattedContent = inputText;
+      try {
+        const jsonObj = JSON.parse(inputText);
+        formattedContent = JSON.stringify(jsonObj, null, 2);
+        isJson = true;
+      } catch (e) {
+        // 不是JSON格式，继续检测是否为代码
+        isJson = false;
+      }
+
+      // 如果不是JSON，则检测是否为代码
+      const isCode = !isJson && /[{}\[\]()=>;]|function|class|import|export|const|let|var/.test(inputText);
+      
       await axios.post('/api/clipboard', {
-        content: inputText,
-        type: isCode ? 'code' : 'text'
+        content: formattedContent,
+        type: isJson ? 'json' : (isCode ? 'code' : 'text')
       });
       message.success('内容已保存到剪贴板');
       setInputText(''); // 清空输入框
@@ -268,22 +281,6 @@ const Clipboard = () => {
     return (
       <List.Item
         key={item.id}
-        actions={[
-          <Popconfirm
-            title="确定要删除这条记录吗？"
-            onConfirm={() => handleDelete(item.id)}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Button 
-              type="text" 
-              danger
-              icon={<DeleteOutlined />}
-            >
-              删除
-            </Button>
-          </Popconfirm>
-        ]}
       >
         <Card 
           style={{ 
@@ -292,7 +289,7 @@ const Clipboard = () => {
           }}
           bodyStyle={{
             padding: '16px',
-            paddingRight: '100px' // 为右侧按钮留出空间
+            paddingRight: '100px'
           }}
         >
           {/* 按钮组 - 竖直排列 */}
@@ -329,6 +326,26 @@ const Clipboard = () => {
             >
               复制
             </Button>
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDelete(item.id)}
+              style={{
+                transition: 'all 0.3s',
+                padding: '4px 8px',
+                height: 'auto',
+                minHeight: '32px'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.backgroundColor = 'rgba(255, 77, 79, 0.1)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              删除
+            </Button>
           </div>
 
           {/* 内容区域 */}
@@ -337,7 +354,44 @@ const Clipboard = () => {
             overflow: 'auto',
             wordBreak: 'break-all'
           }}>
-            {item.type === 'code' ? (
+            {item.type === 'json' ? (
+              <div style={{
+                maxHeight: '500px',
+                overflow: 'auto',
+                backgroundColor: '#1e1e1e',
+                borderRadius: '4px',
+                padding: '12px'
+              }}>
+                <pre style={{
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                  color: '#fff',
+                  fontFamily: 'Monaco, Consolas, monospace',
+                  fontSize: '14px'
+                }}>
+                  {(() => {
+                    try {
+                      const jsonObj = JSON.parse(item.content);
+                      return JSON.stringify(jsonObj, null, 2)
+                        .split('\n')
+                        .map((line, index) => {
+                          // 处理缩进和不同类型的着色
+                          const coloredLine = line
+                            .replace(/"([^"]+)":/g, '<span style="color: #e6db74">\"$1\"</span>:') // 属性名
+                            .replace(/: ?"([^"]+)"/g, ': <span style="color: #a6e22e">\"$1\"</span>') // 字符串值
+                            .replace(/: ?(\d+)/g, ': <span style="color: #ae81ff">$1</span>') // 数字
+                            .replace(/: ?(true|false|null)/g, ': <span style="color: #66d9ef">$1</span>'); // 布尔值和null
+                          return `<span style="color: #75715e">${String(index + 1).padStart(3)}</span>  ${coloredLine}`;
+                        })
+                        .join('\n');
+                    } catch (e) {
+                      return item.content;
+                    }
+                  })()}
+                </pre>
+              </div>
+            ) : item.type === 'code' ? (
               <div style={{
                 maxHeight: '500px',
                 overflow: 'auto'
@@ -349,6 +403,9 @@ const Clipboard = () => {
                     margin: 0,
                     maxWidth: '100%'
                   }}
+                  showLineNumbers={true}
+                  wrapLines={true}
+                  wrapLongLines={true}
                 >
                   {item.content}
                 </SyntaxHighlighter>
