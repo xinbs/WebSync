@@ -32,10 +32,17 @@ const Clipboard = () => {
     fetchItems();
   }, []);
 
+  // 预加载图片并创建 blob URL
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    
+    // 清理旧的 URLs
+    Object.values(imageUrls).forEach(url => URL.revokeObjectURL(url));
+    setImageUrls({});
+
+    // 为每个图片创建新的 blob URL
     items.forEach(item => {
       if (item.type === 'image') {
-        const token = localStorage.getItem('token');
         axios.get(`/api/clipboard/image/${item.id}`, {
           responseType: 'blob',
           headers: {
@@ -52,7 +59,7 @@ const Clipboard = () => {
     });
 
     return () => {
-      // 清理已创建的URL
+      // 组件卸载时清理 URLs
       Object.values(imageUrls).forEach(url => URL.revokeObjectURL(url));
     };
   }, [items]);
@@ -207,24 +214,65 @@ const Clipboard = () => {
             }}
             bodyStyle={{
               padding: '16px',
-              paddingRight: '100px' // 为右侧按钮留出空间
+              paddingRight: '100px'
             }}
           >
             {/* 按钮组 */}
             <div style={{
               position: 'absolute',
-              top: 12,
+              top: 16,
               right: 16,
-              zIndex: 1
+              zIndex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              padding: '4px',
+              borderRadius: '4px',
+              backgroundColor: 'rgba(255, 255, 255, 0.8)',
+              backdropFilter: 'blur(4px)'
             }}>
-              <Space>
-                <Button
-                  type="text"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={() => handleDelete(item.id)}
-                />
-              </Space>
+              <Button
+                type="text"
+                icon={<CopyOutlined />}
+                onClick={() => {
+                  message.info('请使用右键菜单复制图片');
+                }}
+                style={{
+                  color: '#000',
+                  transition: 'all 0.3s',
+                  padding: '4px 8px',
+                  height: 'auto',
+                  minHeight: '32px'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.1)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                复制
+              </Button>
+              <Button
+                type="text"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => handleDelete(item.id)}
+                style={{
+                  transition: 'all 0.3s',
+                  padding: '4px 8px',
+                  height: 'auto',
+                  minHeight: '32px'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 77, 79, 0.1)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+              >
+                删除
+              </Button>
             </div>
 
             <img
@@ -237,7 +285,6 @@ const Clipboard = () => {
                 objectFit: 'contain'
               }}
               onClick={() => {
-                const token = localStorage.getItem('token');
                 const win = window.open('');
                 win.document.write(`
                   <html>
@@ -249,22 +296,7 @@ const Clipboard = () => {
                       </style>
                     </head>
                     <body>
-                      <img id="preview" src="" />
-                      <script>
-                        fetch('/api/clipboard/image/${item.id}', {
-                          headers: {
-                            'Authorization': 'Bearer ${token}'
-                          }
-                        })
-                        .then(response => response.blob())
-                        .then(blob => {
-                          document.getElementById('preview').src = URL.createObjectURL(blob);
-                        })
-                        .catch(error => {
-                          console.error('Error loading image:', error);
-                          document.body.innerHTML = '<div style="color: white; text-align: center;">加载图片失败</div>';
-                        });
-                      </script>
+                      <img src="${imageUrls[item.id]}" />
                     </body>
                   </html>
                 `);
