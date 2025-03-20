@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Input, Button, Space, Switch, message, Typography, Row, Col } from 'antd';
 import { CopyOutlined, DeleteOutlined, CompressOutlined, ExpandOutlined } from '@ant-design/icons';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -12,6 +12,42 @@ const JsonFormatter = () => {
   const [formattedJson, setFormattedJson] = useState('');
   const [keepEscape, setKeepEscape] = useState(false);
   const [error, setError] = useState('');
+  const [wrapLines, setWrapLines] = useState(true);
+  const [formattedLines, setFormattedLines] = useState([]);
+
+  // 格式化 JSON 并处理高亮
+  useEffect(() => {
+    if (formattedJson) {
+      const lines = formattedJson.split('\n');
+      const formattedResult = lines.map(line => {
+        // 属性名
+        let formattedLine = line.replace(/"([^"]+)":/g, (match, p1) => {
+          return `<span class="property-name">"${p1}"</span>:`;
+        });
+        
+        // 字符串值
+        formattedLine = formattedLine.replace(/: "([^"]+)"/g, (match, p1) => {
+          return `: <span class="string-value">"${p1}"</span>`;
+        });
+        
+        // 数字
+        formattedLine = formattedLine.replace(/: (\d+)/g, (match, p1) => {
+          return `: <span class="number-value">${p1}</span>`;
+        });
+        
+        // 布尔值和null
+        formattedLine = formattedLine.replace(/: (true|false|null)/g, (match, p1) => {
+          return `: <span class="keyword-value">${p1}</span>`;
+        });
+        
+        return formattedLine;
+      });
+      
+      setFormattedLines(formattedResult);
+    } else {
+      setFormattedLines([]);
+    }
+  }, [formattedJson]);
 
   // 格式化 JSON
   const formatJson = (compress = false) => {
@@ -82,68 +118,129 @@ const JsonFormatter = () => {
   return (
     <Card title={<Title level={4}>JSON 格式化工具</Title>}>
       <Space direction="vertical" style={{ width: '100%' }} size="large">
-        <Row gutter={16}>
-          <Col span={12}>
+        <Row gutter={20}>
+          <Col span={9}>
             <TextArea
               value={inputJson}
               onChange={(e) => setInputJson(e.target.value)}
               placeholder="请输入要格式化的 JSON..."
-              autoSize={{ minRows: 10, maxRows: 20 }}
-              style={{ fontFamily: 'monospace' }}
+              autoSize={{ minRows: 15, maxRows: 30 }}
+              style={{ 
+                fontFamily: 'monospace',
+                width: '100%',
+                resize: 'vertical'
+              }}
             />
           </Col>
-          <Col span={12}>
-            <div style={{ height: '100%', minHeight: '200px' }}>
+          <Col span={15}>
+            <div 
+              className={`json-output ${wrapLines ? 'wrap-enabled' : ''}`}
+              style={{ 
+                height: '100%', 
+                minHeight: '300px', 
+                maxHeight: '600px',
+                overflow: 'auto',
+                backgroundColor: '#1e1e1e',
+                borderRadius: '4px',
+                position: 'relative'
+              }}
+            >
               {formattedJson && (
-                <SyntaxHighlighter
-                  language="json"
-                  style={tomorrow}
-                  customStyle={{ margin: 0 }}
-                >
-                  {formattedJson}
-                </SyntaxHighlighter>
+                wrapLines ? (
+                  <div style={{
+                    padding: '16px',
+                    fontFamily: 'Monaco, Consolas, monospace',
+                    fontSize: '14px',
+                    color: '#fff',
+                    lineHeight: '1.5'
+                  }}>
+                    {formattedLines.map((line, index) => (
+                      <div key={index} style={{ display: 'flex' }}>
+                        <span style={{ color: '#75715e', minWidth: '40px', marginRight: '8px', userSelect: 'none' }}>
+                          {index + 1}
+                        </span>
+                        <span 
+                          style={{ flex: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+                          dangerouslySetInnerHTML={{ __html: line }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <SyntaxHighlighter
+                    language="json"
+                    style={tomorrow}
+                    customStyle={{ 
+                      margin: 0,
+                      fontSize: '14px'
+                    }}
+                    showLineNumbers
+                  >
+                    {formattedJson}
+                  </SyntaxHighlighter>
+                )
               )}
             </div>
+
+            <style>{`
+              .json-output .property-name { color: #e6db74; }
+              .json-output .string-value { color: #a6e22e; }
+              .json-output .number-value { color: #ae81ff; }
+              .json-output .keyword-value { color: #66d9ef; }
+            `}</style>
           </Col>
         </Row>
 
-        <Space>
-          <Button
-            type="primary"
-            onClick={() => formatJson(false)}
-            icon={<ExpandOutlined />}
-          >
-            格式化
-          </Button>
-          <Button
-            onClick={() => formatJson(true)}
-            icon={<CompressOutlined />}
-          >
-            压缩
-          </Button>
-          <Button
-            onClick={copyToClipboard}
-            disabled={!formattedJson}
-            icon={<CopyOutlined />}
-          >
-            复制结果
-          </Button>
-          <Button
-            danger
-            onClick={clearContent}
-            icon={<DeleteOutlined />}
-          >
-            清空
-          </Button>
-          <Space>
-            保留转义
-            <Switch
-              checked={keepEscape}
-              onChange={setKeepEscape}
-              size="small"
-            />
-          </Space>
-        </Space>
+        <Row>
+          <Col span={24}>
+            <Space wrap>
+              <Button
+                type="primary"
+                onClick={() => formatJson(false)}
+                icon={<ExpandOutlined />}
+              >
+                格式化
+              </Button>
+              <Button
+                onClick={() => formatJson(true)}
+                icon={<CompressOutlined />}
+              >
+                压缩
+              </Button>
+              <Button
+                onClick={copyToClipboard}
+                disabled={!formattedJson}
+                icon={<CopyOutlined />}
+              >
+                复制结果
+              </Button>
+              <Button
+                danger
+                onClick={clearContent}
+                icon={<DeleteOutlined />}
+              >
+                清空
+              </Button>
+              <Space>
+                保留转义
+                <Switch
+                  checked={keepEscape}
+                  onChange={setKeepEscape}
+                  size="small"
+                />
+              </Space>
+              <Space>
+                自动换行
+                <Switch
+                  checked={wrapLines}
+                  onChange={setWrapLines}
+                  size="small"
+                  defaultChecked
+                />
+              </Space>
+            </Space>
+          </Col>
+        </Row>
 
         {error && (
           <Typography.Text type="danger">
