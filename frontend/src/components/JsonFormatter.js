@@ -124,11 +124,12 @@ const JsonFormatter = () => {
               value={inputJson}
               onChange={(e) => setInputJson(e.target.value)}
               placeholder="请输入要格式化的 JSON..."
-              autoSize={{ minRows: 15, maxRows: 30 }}
+              autoSize={{ minRows: 15, maxRows: formattedJson && formattedJson.split('\n').length > 30 ? 40 : 30 }}
               style={{ 
                 fontFamily: 'monospace',
                 width: '100%',
-                resize: 'vertical'
+                resize: 'vertical',
+                minHeight: '300px',
               }}
             />
           </Col>
@@ -136,13 +137,15 @@ const JsonFormatter = () => {
             <div 
               className={`json-output ${wrapLines ? 'wrap-enabled' : ''}`}
               style={{ 
-                height: '100%', 
+                height: 'auto', 
                 minHeight: '300px', 
-                maxHeight: '600px',
+                maxHeight: formattedJson && formattedJson.split('\n').length > 30 ? '800px' : '600px',
                 overflow: 'auto',
                 backgroundColor: '#1e1e1e',
                 borderRadius: '4px',
-                position: 'relative'
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column'
               }}
             >
               {formattedJson && (
@@ -152,15 +155,28 @@ const JsonFormatter = () => {
                     fontFamily: 'Monaco, Consolas, monospace',
                     fontSize: '14px',
                     color: '#fff',
-                    lineHeight: '1.5'
+                    lineHeight: '1.5',
+                    flex: '1',
+                    display: 'flex',
+                    flexDirection: 'column'
                   }}>
                     {formattedLines.map((line, index) => (
-                      <div key={index} style={{ display: 'flex' }}>
-                        <span style={{ color: '#75715e', minWidth: '40px', marginRight: '8px', userSelect: 'none' }}>
+                      <div key={index} style={{ display: 'flex', minHeight: '22px' }}>
+                        <span style={{ 
+                          color: '#75715e', 
+                          minWidth: '40px', 
+                          marginRight: '8px', 
+                          userSelect: 'none',
+                          textAlign: 'right' 
+                        }}>
                           {index + 1}
                         </span>
                         <span 
-                          style={{ flex: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+                          style={{ 
+                            flex: 1, 
+                            whiteSpace: 'pre-wrap', 
+                            wordBreak: 'break-all'
+                          }}
                           dangerouslySetInnerHTML={{ __html: line }}
                         />
                       </div>
@@ -172,7 +188,9 @@ const JsonFormatter = () => {
                     style={tomorrow}
                     customStyle={{ 
                       margin: 0,
-                      fontSize: '14px'
+                      fontSize: '14px',
+                      flex: '1',
+                      height: '100%'
                     }}
                     showLineNumbers
                   >
