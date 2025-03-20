@@ -895,6 +895,62 @@ def delete_user(user_id):
         db.session.rollback()
         return jsonify({'error': f'删除用户失败: {str(e)}'}), 500
 
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+@jwt_required()
+def update_user(user_id):
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'error': '用户未找到'}), 404
+            
+        # 只有管理员和管理者可以编辑用户
+        if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER]:
+            return jsonify({'error': '没有权限编辑用户'}), 403
+            
+        target_user = User.query.get(user_id)
+        if not target_user:
+            return jsonify({'error': '要编辑的用户不存在'}), 404
+            
+        # 普通管理者不能编辑管理员账户
+        if target_user.role == UserRole.ADMIN and current_user.role != UserRole.ADMIN:
+            return jsonify({'error': '没有权限编辑管理员账户'}), 403
+            
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': '没有提供有效的数据'}), 400
+            
+        # 更新邮箱
+        if 'email' in data and data['email'] != target_user.email:
+            # 检查邮箱是否已被使用
+            existing_user = User.query.filter_by(email=data['email']).first()
+            if existing_user and existing_user.id != user_id:
+                return jsonify({'error': '邮箱已被其他用户使用'}), 400
+            target_user.email = data['email']
+            
+        # 更新角色（只有管理员可以更改角色）
+        if 'role' in data and current_user.role == UserRole.ADMIN:
+            target_user.role = data['role']
+            
+        # 更新存储限制
+        if 'storage_limit' in data:
+            target_user.storage_limit = int(data['storage_limit'])
+            
+        db.session.commit()
+        
+        return jsonify({
+            'message': '用户更新成功',
+            'user': {
+                'id': target_user.id,
+                'email': target_user.email,
+                'role': target_user.role,
+                'storage_limit': target_user.storage_limit,
+                'storage_used': target_user.storage_used
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'更新用户失败: {str(e)}'}), 500
+
 @app.route('/api/clipboard/<int:item_id>')
 @jwt_required()
 def get_clipboard_item(item_id):
