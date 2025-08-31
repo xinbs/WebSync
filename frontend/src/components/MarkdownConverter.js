@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Card, Input, Button, Upload, message, Space, Divider, Row, Col, Typography } from 'antd';
-import { UploadOutlined, DownloadOutlined, FileImageOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Card, Input, Button, Upload, message, Space, Divider, Row, Col, Typography, Switch, Select } from 'antd';
+import { UploadOutlined, DownloadOutlined, FileImageOutlined, FileTextOutlined, SettingOutlined } from '@ant-design/icons';
 import { marked } from 'marked';
 import { toPng } from 'html-to-image';
 
@@ -12,6 +12,152 @@ const MarkdownConverter = () => {
   const [htmlContent, setHtmlContent] = useState('');
   const [loading, setLoading] = useState(false);
   const previewRef = useRef(null);
+  
+  // 水印相关状态
+  const [watermarkEnabled, setWatermarkEnabled] = useState(false);
+  const [watermarkText, setWatermarkText] = useState('');
+  const [watermarkOpacity, setWatermarkOpacity] = useState(0.3);
+  const [watermarkSize, setWatermarkSize] = useState('medium');
+  
+  // 从localStorage加载水印设置
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('watermarkSettings');
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        setWatermarkEnabled(settings.enabled || false);
+        setWatermarkText(settings.text || '');
+        setWatermarkOpacity(settings.opacity || 0.3);
+        setWatermarkSize(settings.size || 'medium');
+      } catch (error) {
+        console.error('Failed to load watermark settings:', error);
+      }
+    }
+  }, []);
+  
+  // 保存水印设置到localStorage
+  const saveWatermarkSettings = (enabled, text, opacity, size) => {
+    const settings = {
+      enabled,
+      text,
+      opacity,
+      size
+    };
+    localStorage.setItem('watermarkSettings', JSON.stringify(settings));
+  };
+  
+  // 生成水印样式
+   const getWatermarkStyle = () => {
+     if (!watermarkEnabled || !watermarkText.trim()) return '';
+     
+     const fontSizes = {
+       small: '14px',
+       medium: '16px', 
+       large: '18px'
+     };
+     
+     return `
+       .watermark {
+             position: absolute;
+             bottom: 10px;
+             right: 10px;
+          display: inline-block;
+          width: auto;
+         font-family: 'STKaiti', '楷体', 'KaiTi', 'Brush Script MT', cursive, serif;
+         font-size: ${fontSizes[watermarkSize]};
+         font-weight: bold;
+         color: rgba(255, 255, 255, 0.95);
+         background: linear-gradient(135deg, 
+           rgba(45, 55, 72, ${watermarkOpacity * 0.9}) 0%, 
+           rgba(74, 85, 104, ${watermarkOpacity * 0.8}) 100%
+         );
+         padding: 4px 8px;
+         border-radius: 6px;
+         backdrop-filter: blur(8px) saturate(150%);
+         -webkit-backdrop-filter: blur(8px) saturate(150%);
+         border: 1px solid rgba(203, 213, 224, 0.6);
+         box-shadow: 
+           0 4px 12px rgba(0, 0, 0, 0.1),
+           0 1px 3px rgba(0, 0, 0, 0.08);
+         pointer-events: none;
+         user-select: none;
+         z-index: 1000;
+         transition: all 0.3s ease;
+         letter-spacing: 1px;
+         text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+         font-style: italic;
+         transform: translateZ(0);
+       }
+       
+       .watermark::before {
+         content: '';
+         position: absolute;
+         top: 0;
+         left: 0;
+         right: 0;
+         bottom: 0;
+         background: linear-gradient(135deg, 
+           rgba(99, 179, 237, 0.08) 0%, 
+           rgba(139, 195, 74, 0.06) 25%,
+           rgba(255, 193, 7, 0.04) 50%,
+           rgba(233, 30, 99, 0.06) 75%,
+           rgba(156, 39, 176, 0.08) 100%
+         );
+         border-radius: 6px;
+         opacity: 0.6;
+         transition: opacity 0.4s ease;
+       }
+       
+       .watermark::after {
+         content: '';
+         position: absolute;
+         top: -2px;
+         left: -2px;
+         right: -2px;
+         bottom: -2px;
+         background: linear-gradient(135deg, 
+           rgba(255, 255, 255, 0.3) 0%,
+           rgba(255, 255, 255, 0.1) 50%,
+           rgba(255, 255, 255, 0.2) 100%
+         );
+         border-radius: 8px;
+         z-index: -1;
+         opacity: 0.5;
+       }
+       
+       .watermark:hover::before {
+         opacity: 1;
+       }
+       
+       .watermark:hover {
+         transform: translateY(-2px) translateZ(0);
+         box-shadow: 
+           0 6px 20px rgba(0, 0, 0, 0.15),
+           0 2px 6px rgba(0, 0, 0, 0.1);
+       }
+       
+       @media print {
+         .watermark {
+           position: absolute;
+           background: rgba(248, 250, 252, 0.8);
+           backdrop-filter: none;
+           border: 1px solid rgba(0, 0, 0, 0.1);
+           box-shadow: none;
+           transform: none;
+         }
+         
+         .watermark::before {
+           display: none;
+         }
+       }
+     `;
+   };
+  
+  // 生成水印HTML
+  const getWatermarkHtml = () => {
+    if (!watermarkEnabled || !watermarkText.trim()) return '';
+    return `<div class="watermark">${watermarkText}</div>`;
+  };
 
   // 配置marked选项
   marked.setOptions({
@@ -57,6 +203,10 @@ const MarkdownConverter = () => {
         body:not([data-preview]) .container {
             max-width: 1000px;
             margin: 0 auto;
+        }
+        
+        .container {
+            position: relative;
         }
         h1 {
             color: #2c3e50;
@@ -161,11 +311,13 @@ const MarkdownConverter = () => {
             border-radius: 10px;
             padding: 25px;
         }
+        ${getWatermarkStyle()}
     </style>
 </head>
 <body>
     <div class="container">
         ${content}
+        ${getWatermarkHtml()}
     </div>
     <script>
         mermaid.initialize({ startOnLoad: true, theme: 'default' });
@@ -410,6 +562,95 @@ const MarkdownConverter = () => {
               </Button>
             </Space>
           </Card>
+          
+          {/* 水印设置面板 */}
+          <Card 
+            title={
+              <Space>
+                <SettingOutlined />
+                水印设置
+              </Space>
+            } 
+            size="small" 
+            style={{ marginTop: '16px' }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text>启用水印</Text>
+                <Switch 
+                  checked={watermarkEnabled}
+                  onChange={(checked) => {
+                    setWatermarkEnabled(checked);
+                    saveWatermarkSettings(checked, watermarkText, watermarkOpacity, watermarkSize);
+                  }}
+                />
+              </div>
+              
+              {watermarkEnabled && (
+                <>
+                  <div>
+                    <Text style={{ display: 'block', marginBottom: '8px' }}>水印内容</Text>
+                    <Input
+                      value={watermarkText}
+                      onChange={(e) => {
+                        setWatermarkText(e.target.value);
+                        saveWatermarkSettings(watermarkEnabled, e.target.value, watermarkOpacity, watermarkSize);
+                      }}
+                      placeholder="请输入水印文字"
+                      maxLength={50}
+                    />
+                  </div>
+                  
+                  <div>
+                    <Text style={{ display: 'block', marginBottom: '8px' }}>透明度: {Math.round(watermarkOpacity * 100)}%</Text>
+                    <input
+                       type="range"
+                       min="0.2"
+                       max="0.8"
+                       step="0.1"
+                       value={watermarkOpacity}
+                       onChange={(e) => {
+                         const opacity = parseFloat(e.target.value);
+                         setWatermarkOpacity(opacity);
+                         saveWatermarkSettings(watermarkEnabled, watermarkText, opacity, watermarkSize);
+                       }}
+                       style={{ 
+                         width: '100%',
+                         height: '6px',
+                         borderRadius: '3px',
+                         background: 'linear-gradient(to right, #e2e8f0, #3b82f6)',
+                         outline: 'none',
+                         cursor: 'pointer'
+                       }}
+                     />
+                  </div>
+                  
+                  <div>
+                    <Text style={{ display: 'block', marginBottom: '8px' }}>字体大小</Text>
+                    <Select
+                      value={watermarkSize}
+                      onChange={(size) => {
+                        setWatermarkSize(size);
+                        saveWatermarkSettings(watermarkEnabled, watermarkText, watermarkOpacity, size);
+                      }}
+                      style={{ width: '100%' }}
+                      options={[
+                        { value: 'small', label: '小' },
+                        { value: 'medium', label: '中' },
+                        { value: 'large', label: '大' }
+                      ]}
+                    />
+                  </div>
+                  
+                  <div style={{ padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      💡 水印将显示在预览区域右下角，不影响阅读体验
+                    </Text>
+                  </div>
+                </>
+              )}
+            </Space>
+          </Card>
         </Col>
         
         <Col xs={24} lg={12}>
@@ -449,7 +690,7 @@ const MarkdownConverter = () => {
               }}
             >
               {htmlContent ? (
-                <div style={{ width: '100%', minHeight: '100%', backgroundColor: 'transparent' }}>
+                <div style={{ width: '100%', minHeight: '100%', backgroundColor: 'transparent', position: 'relative', padding: '20px' }}>
                   <style>
                     {`
                       .mermaid {
@@ -460,12 +701,47 @@ const MarkdownConverter = () => {
                         border-radius: 10px;
                         padding: 25px;
                       }
+                      ${getWatermarkStyle()}
                     `}
                   </style>
                   <div 
                     dangerouslySetInnerHTML={{ __html: htmlContent }}
                     data-preview="true"
+                    style={{ position: 'relative' }}
                   />
+                  {watermarkEnabled && watermarkText.trim() && (
+                     <div 
+                       className="watermark"
+                       style={{
+                         position: 'absolute',
+                         bottom: '10px',
+                         right: '10px',
+                       display: 'inline-block',
+                       width: 'auto',
+                       fontFamily: "'STKaiti', '楷体', 'KaiTi', 'Brush Script MT', cursive, serif",
+                       fontSize: watermarkSize === 'small' ? '14px' : watermarkSize === 'large' ? '18px' : '16px',
+                       fontWeight: 'bold',
+                       fontStyle: 'italic',
+                       color: 'rgba(255, 255, 255, 0.95)',
+                       background: `linear-gradient(135deg, rgba(45, 55, 72, ${watermarkOpacity * 0.9}) 0%, rgba(74, 85, 104, ${watermarkOpacity * 0.8}) 100%)`,
+                       padding: '4px 8px',
+                       borderRadius: '6px',
+                       backdropFilter: 'blur(8px) saturate(150%)',
+                       WebkitBackdropFilter: 'blur(8px) saturate(150%)',
+                       border: '1px solid rgba(203, 213, 224, 0.6)',
+                       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08)',
+                       pointerEvents: 'none',
+                       userSelect: 'none',
+                       zIndex: 1000,
+                       transition: 'all 0.3s ease',
+                       letterSpacing: '1px',
+                       textShadow: '0 1px 2px rgba(255, 255, 255, 0.8)',
+                       transform: 'translateZ(0)'
+                     }}
+                   >
+                     {watermarkText}
+                   </div>
+                 )}
                 </div>
               ) : (
                 <div style={{ 
