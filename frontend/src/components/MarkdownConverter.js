@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, Input, Button, Upload, message, Space, Divider, Row, Col, Typography } from 'antd';
 import { UploadOutlined, DownloadOutlined, FileImageOutlined, FileTextOutlined } from '@ant-design/icons';
 import { marked } from 'marked';
@@ -30,24 +30,33 @@ const MarkdownConverter = () => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Markdown 渲染结果</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
     <style>
         body {
             font-family: 'Microsoft YaHei', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 100%;
             margin: 0 auto;
-            padding: 0;
+            padding: 20px;
             background-color: #f8f9fa;
             line-height: 1.6;
             box-sizing: border-box;
+            min-height: 100vh;
         }
+        
         .container {
             background: white;
             border-radius: 12px;
             padding: 20px;
             margin: 10px;
             width: calc(100% - 20px);
+            max-width: 100%;
             box-sizing: border-box;
             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        /* 只在独立HTML文件中应用宽度限制，预览时不限制 */
+        body:not([data-preview]) .container {
+            max-width: 1000px;
+            margin: 0 auto;
         }
         h1 {
             color: #2c3e50;
@@ -144,14 +153,50 @@ const MarkdownConverter = () => {
             margin: 15px 0;
             text-align: justify;
         }
+        .mermaid {
+            text-align: center;
+            margin: 30px 0;
+            background: #fafafa;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            padding: 25px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         ${content}
     </div>
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
 </body>
 </html>`;
+  };
+
+  // 处理HTML中的mermaid代码块
+  const processMermaidInHtml = (html) => {
+    console.log('Processing mermaid blocks in HTML...');
+    // 匹配被marked转换后的mermaid代码块: <pre><code class="language-mermaid">...</code></pre>
+    const result = html.replace(/<pre><code class="language-mermaid">(.*?)<\/code><\/pre>/gs, (match, code) => {
+      console.log('Found mermaid block in HTML:', code.substring(0, 50) + '...');
+      // 解码HTML实体
+      const decodedCode = code.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      return `<div class="mermaid">${decodedCode.trim()}</div>`;
+    });
+    console.log('Mermaid HTML processing complete');
+    return result;
+  };
+
+  // 处理原始markdown中的mermaid代码块（保留作为备用）
+  const processMermaidBlocks = (text) => {
+    console.log('Processing mermaid blocks in text...');
+    const result = text.replace(/```mermaid\s*\n([\s\S]*?)\n```/g, (match, code) => {
+      console.log('Found mermaid block:', code.substring(0, 50) + '...');
+      return `<div class="mermaid">${code.trim()}</div>`;
+    });
+    console.log('Mermaid processing complete');
+    return result;
   };
 
   // 转换markdown为HTML
@@ -162,14 +207,65 @@ const MarkdownConverter = () => {
     }
 
     try {
+      // 先用marked转换markdown
       const html = marked(markdownText);
-      const styledHtml = getStyledHtml(html);
+      // 然后处理转换后HTML中的mermaid代码块
+      const processedHtml = processMermaidInHtml(html);
+      const styledHtml = getStyledHtml(processedHtml);
       setHtmlContent(styledHtml);
       message.success('转换成功！');
     } catch (error) {
       message.error('转换失败：' + error.message);
     }
   };
+
+  // 加载mermaid库
+  useEffect(() => {
+    if (!window.mermaid) {
+      console.log('Loading Mermaid library...');
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js';
+      script.onload = () => {
+        console.log('Mermaid library loaded successfully');
+        window.mermaid.initialize({ 
+          startOnLoad: false, 
+          theme: 'default',
+          securityLevel: 'loose'
+        });
+        console.log('Mermaid initialized');
+      };
+      script.onerror = (error) => {
+        console.error('Failed to load Mermaid library:', error);
+      };
+      document.head.appendChild(script);
+    } else {
+      console.log('Mermaid library already loaded');
+    }
+  }, []);
+
+  // 处理预览区域的mermaid渲染
+  useEffect(() => {
+    if (htmlContent && window.mermaid) {
+      // 延迟执行以确保DOM已更新
+      setTimeout(() => {
+        try {
+          const mermaidElements = document.querySelectorAll('.mermaid');
+          console.log('Found mermaid elements:', mermaidElements.length);
+          if (mermaidElements.length > 0) {
+            // 清除之前的渲染
+            mermaidElements.forEach(element => {
+              if (element.getAttribute('data-processed') !== 'true') {
+                console.log('Processing mermaid element:', element.textContent.substring(0, 50));
+              }
+            });
+            window.mermaid.init(undefined, mermaidElements);
+          }
+        } catch (error) {
+          console.error('Mermaid rendering error:', error);
+        }
+      }, 200);
+    }
+  }, [htmlContent]);
 
   // 转换为图片
   const convertToImage = async () => {
@@ -353,14 +449,24 @@ const MarkdownConverter = () => {
               }}
             >
               {htmlContent ? (
-                <div 
-                  dangerouslySetInnerHTML={{ __html: htmlContent }}
-                  style={{ 
-                    width: '100%',
-                    minHeight: '100%',
-                    backgroundColor: 'transparent'
-                  }}
-                />
+                <div style={{ width: '100%', minHeight: '100%', backgroundColor: 'transparent' }}>
+                  <style>
+                    {`
+                      .mermaid {
+                        text-align: center;
+                        margin: 30px 0;
+                        background: #fafafa;
+                        border: 2px solid #e1e8ed;
+                        border-radius: 10px;
+                        padding: 25px;
+                      }
+                    `}
+                  </style>
+                  <div 
+                    dangerouslySetInnerHTML={{ __html: htmlContent }}
+                    data-preview="true"
+                  />
+                </div>
               ) : (
                 <div style={{ 
                   display: 'flex', 
