@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>碧海惊涛 攻略（55K 整理版）</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+            line-height: 1.6;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 15px;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+        h3 {
+            color: #2980b9;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        tr:hover {
+            background-color: #e3f2fd;
+            transition: background-color 0.3s ease;
+        }
+        .mermaid {
+            text-align: center;
+            margin: 30px 0;
+            background: #fafafa;
+            border: 2px solid #e1e8ed;
+            border-radius: 10px;
+            padding: 25px;
+        }
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+        li {
+            margin: 8px 0;
+        }
+        strong {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        hr {
+            border: none;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #3498db, transparent);
+            margin: 30px 0;
+        }
+        .highlight {
+            background: linear-gradient(120deg, #a8edea 0%, #fed6e3 100%);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #3498db;
+        }
+        code {
+            background: #f1f2f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            color: #e74c3c;
+        }
+        .toc {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .toc h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .toc ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .toc li {
+            margin: 8px 0;
+        }
+        .toc a {
+            color: #3498db;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+        .toc a:hover {
+            background: #3498db;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="toc">
+            <h3>📋 目录</h3>
+            <ul>
+                <li><a href="#section1">一、舰船流派对比</a></li>
+                <li><a href="#section2">二、舰船装备图纸搭配</a></li>
+                <li><a href="#section3">三、队伍与兵种推荐</a></li>
+                <li><a href="#section4">四、海上贸易与材料获取</a></li>
+                <li><a href="#section5">五、核心补充与注意事项</a></li>
+                <li><a href="#section6">六、队伍搭配总览表</a></li>
+                <li><a href="#section7">七、阵容可视化（Mermaid 图）</a></li>
+            </ul>
+        </div>
+
+        <h1>⚓ 碧海惊涛 攻略（55K 整理版）</h1>
+        
+        <h2 id="section1">一、舰船流派对比</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>舰船流派</th>
+                    <th>效果简介</th>
+                    <th>适用场景</th>
+                    <th>推荐队伍</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>铁壁</strong></td>
+                    <td>出城即得1层，战斗受击叠层，最高8层，全军伤害减免，PVP阵亡率降低10%。层数还能提供队伍攻击/防御加成。</td>
+                    <td>团战、核心主力抗压</td>
+                    <td>女帝队伍（必须带铁壁，防止集火掉加成）</td>
+                </tr>
+                <tr>
+                    <td><strong>破军</strong></td>
+                    <td>歼灭部队叠层（最高8），全军伤害+3%，PVP歼灭率+10%。层数同样加攻击/防御。</td>
+                    <td>高培养副队或主力副队</td>
+                    <td>高红队伍、爆发队</td>
+                </tr>
+                <tr>
+                    <td><strong>强驱</strong></td>
+                    <td>耐久伤害+10%，部队伤害+6%。多目标时进一步提升，对克制目标额外加伤。</td>
+                    <td>单挑、偷袭、骑兵/剑兵输出</td>
+                    <td>平民骑兵主队，高红骑兵、剑兵</td>
+                </tr>
+                <tr>
+                    <td><strong>冲锋</strong></td>
+                    <td>多目标叠层耐久伤害/部队伤害，叠满后对非克制目标还能减伤。</td>
+                    <td>团战锁多队时提升最大</td>
+                    <td>肉度一般的队伍</td>
+                </tr>
+                <tr>
+                    <td><strong>怒涛</strong></td>
+                    <td>被≥3个敌军攻击，叠加增伤，最高6层，攻防伤害提升。</td>
+                    <td>团战抗压，低红队伍</td>
+                    <td>混合团战队</td>
+                </tr>
+                <tr>
+                    <td><strong>反戈</strong></td>
+                    <td>被≥3个敌军攻击，叠加减伤，最高6层，攻防提升，受伤降低。</td>
+                    <td>偏肉队伍，指挥消耗型</td>
+                    <td>防守、消耗队</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <hr>
+
+        <h2 id="section2">二、舰船装备图纸搭配</h2>
+        
+        <h3>前期</h3>
+        <ul>
+            <li><strong>铁臂舰</strong> → 图纸：不动金城</li>
+            <li><strong>强驱舰</strong> → 图纸：裂地崩山</li>
+        </ul>
+
+        <h3>后期（等级提升后）</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>队伍</th>
+                    <th>图纸推荐</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>平民骑兵主队</strong></td>
+                    <td>2 × 不动金城 + 4 × 卸甲修罗（团战集火拆女帝船）</td>
+                </tr>
+                <tr>
+                    <td><strong>其他兵种主队</strong></td>
+                    <td>自行搭配：裂地崩山、不动金城、神火祝融（需4件）、决胜千里（类似强心战法）</td>
+                </tr>
+                <tr>
+                    <td><strong>高红骑兵/剑兵队</strong></td>
+                    <td>团战：4 × 卸甲修罗 或 4 × 破军兵主 + 2 × 裂地崩山；<br>平常带街：避免卸甲修罗，船爆太快</td>
+                </tr>
+                <tr>
+                    <td><strong>女帝队伍</strong></td>
+                    <td>2 × 不动金城 + 4 × 机巧奇功（若不会拉扯可用4金城+2机巧）</td>
+                </tr>
+                <tr>
+                    <td><strong>高红枪兵队</strong></td>
+                    <td>4 × 不动金城 + 2 × 机巧奇功 或 2 × 决胜千里</td>
+                </tr>
+                <tr>
+                    <td><strong>辅助副队</strong></td>
+                    <td>4 × 神火祝融 + 2 × 决胜千里（蹭战、放火辅助）</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <hr>
+
+        <h2 id="section3">三、队伍与兵种推荐</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>兵种/队伍</th>
+                    <th>船舰推荐</th>
+                    <th>图纸配置</th>
+                    <th>备注</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>平民骑兵</td>
+                    <td>强驱舰</td>
+                    <td>2金城 + 4修罗</td>
+                    <td>主队，针对女帝拆船</td>
+                </tr>
+                <tr>
+                    <td>其余兵种</td>
+                    <td>铁臂舰</td>
+                    <td>自选（裂地/金城/神火/千里）</td>
+                    <td>平衡/功能性</td>
+                </tr>
+                <tr>
+                    <td>高红骑兵</td>
+                    <td>强驱舰</td>
+                    <td>4修罗或破军 + 2裂地</td>
+                    <td>团战盯女帝</td>
+                </tr>
+                <tr>
+                    <td>高红剑兵</td>
+                    <td>强驱舰</td>
+                    <td>同上</td>
+                    <td>团战盯周瑜</td>
+                </tr>
+                <tr>
+                    <td>女帝队</td>
+                    <td>铁臂舰</td>
+                    <td>2金城 + 4机巧</td>
+                    <td>集火核心，必铁臂</td>
+                </tr>
+                <tr>
+                    <td>高红枪兵</td>
+                    <td>铁臂舰</td>
+                    <td>4金城 + 2机巧/千里</td>
+                    <td>团战续航</td>
+                </tr>
+                <tr>
+                    <td>辅助副队</td>
+                    <td>铁臂舰</td>
+                    <td>4神火祝融 + 2千里</td>
+                    <td>拆迁/放火</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <hr>
+
+        <h2 id="section4">四、海上贸易与材料获取</h2>
+        <div class="highlight">
+            <strong>贸易规则</strong>：低买高卖 → 航海币
+        </div>
+        <strong>操作流程</strong>：
+        <ol>
+            <li>选3个绿标买低价橙货（只派1次），再去高价点卖出</li>
+            <li>完成后商人等级升级，可解锁商会</li>
+            <li>每日最多 4 次贸易</li>
+        </ol>
+        <ul>
+            <li><strong>商会订单</strong>：优先接 6次订单，配合海图商品</li>
+            <li><strong>商会商店必买</strong>：
+                <ul>
+                    <li>龙骨木（舰船升级必需，每周必买）</li>
+                    <li>打造材料（不要囤积，及时用）</li>
+                </ul>
+            </li>
+        </ul>
+
+        <hr>
+
+        <h2 id="section5">五、核心补充与注意事项</h2>
+        <ol>
+            <li><strong>铁壁（不动金城）不是纯防御</strong>
+                <ul>
+                    <li>耐久太高没意义，破军兵主能无视耐久直接打血。</li>
+                    <li>推荐混搭 <strong>破军兵主</strong> 增加主动打架能力。</li>
+                </ul>
+            </li>
+            <li><strong>神火祝融</strong>
+                <ul>
+                    <li>每个人都要搞一队，主打 <strong>放火拆迁</strong>。</li>
+                    <li>防守时常常靠神火祝融翻盘。</li>
+                </ul>
+            </li>
+            <li><strong>装备打造材料</strong>
+                <ul>
+                    <li>每周海贸买满。</li>
+                    <li>有材料就直接打造，不要留着，否则等级上不去，图纸用不了。</li>
+                </ul>
+            </li>
+        </ol>
+
+        <hr>
+
+        <h2 id="section6">六、队伍搭配总览表</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>队伍类型</th>
+                    <th>舰船选择</th>
+                    <th>图纸配置</th>
+                    <th>定位与打法</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>平民骑兵主队</strong></td>
+                    <td>强驱舰</td>
+                    <td>2 × 不动金城 + 4 × 卸甲修罗</td>
+                    <td>主力输出，团战集火拆女帝船，加快女帝被下加成</td>
+                </tr>
+                <tr>
+                    <td><strong>其他兵种主队</strong></td>
+                    <td>铁臂舰</td>
+                    <td>裂地崩山 / 不动金城 / 神火祝融(4件) / 决胜千里 自由搭配</td>
+                    <td>平衡型，功能性增强</td>
+                </tr>
+                <tr>
+                    <td><strong>高红骑兵队</strong></td>
+                    <td>强驱舰</td>
+                    <td>4 × 卸甲修罗（或 4 × 破军兵主）+ 2 × 裂地崩山</td>
+                    <td>团战时盯女帝，偷袭爆发输出</td>
+                </tr>
+                <tr>
+                    <td><strong>高红剑兵队</strong></td>
+                    <td>强驱舰</td>
+                    <td>同上（4修罗/破军 + 2裂地）</td>
+                    <td>团战时盯周瑜，高爆发输出</td>
+                </tr>
+                <tr>
+                    <td><strong>女帝队伍</strong></td>
+                    <td>铁臂舰</td>
+                    <td>2 × 不动金城 + 4 × 机巧奇功（或 4金城 + 2机巧）</td>
+                    <td>团战核心，抗集火必备铁臂</td>
+                </tr>
+                <tr>
+                    <td><strong>高红枪兵队</strong></td>
+                    <td>铁臂舰</td>
+                    <td>4 × 不动金城 + 2 × 机巧奇功 / 决胜千里</td>
+                    <td>团战续航，持久作战</td>
+                </tr>
+                <tr>
+                    <td><strong>辅助副队</strong></td>
+                    <td>铁臂舰</td>
+                    <td>4 × 神火祝融 + 2 × 决胜千里</td>
+                    <td>放火拆迁，蹭战辅助翻盘</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <hr>
+
+        <h2 id="section7">七、阵容可视化（Mermaid 图）</h2>
+        <div class="mermaid">
+flowchart TD
+  subgraph 舰船选择
+    A1[强驱舰]
+    A2[铁臂舰]
+  end
+
+  %% 强驱舰阵容
+  A1 --> B1[2金城 + 4卸甲修罗]
+  A1 --> B2[4修罗/破军 + 2裂地]
+
+  B1 --> C1[平民骑兵主队]
+  C1 --> D1[主力输出<br>团战集火拆女帝]
+
+  B2 --> C2[高红骑兵队]
+  C2 --> D2[团战盯女帝<br>偷袭爆发]
+
+  B2 --> C3[高红剑兵队]
+  C3 --> D3[团战盯周瑜<br>高爆发输出]
+
+  %% 铁臂舰阵容
+  A2 --> B3[裂地/金城/神火祝融/千里 自由搭配]
+  A2 --> B4[2金城 + 4机巧奇功]
+  A2 --> B5[4金城 + 2机巧/千里]
+  A2 --> B6[4神火祝融 + 2千里]
+
+  B3 --> C4[其他兵种主队]
+  C4 --> D4[平衡型<br>功能增强]
+
+  B4 --> C5[女帝队伍]
+  C5 --> D5[团战核心<br>抗集火必铁臂]
+
+  B5 --> C6[高红枪兵队]
+  C6 --> D6[团战续航<br>持久作战]
+
+  B6 --> C7[辅助副队]
+  C7 --> D7[放火拆迁<br>蹭战辅助]
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            },
+            themeVariables: {
+                primaryColor: '#3498db',
+                primaryTextColor: '#2c3e50',
+                primaryBorderColor: '#2980b9',
+                lineColor: '#34495e',
+                secondaryColor: '#ecf0f1',
+                tertiaryColor: '#f8f9fa'
+            }
+        });
+
+        // 平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -10,6 +10,7 @@ import Clipboard from './components/Clipboard';
 import JsonFormatter from './components/JsonFormatter';
 import RegexTester from './components/RegexTester';
 import GrokDebugger from './components/GrokDebugger';
+import MarkdownConverter from './components/MarkdownConverter';
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -79,6 +80,11 @@ const App = () => {
       key: 'grok',
       label: 'Grok工具',
       children: <GrokDebugger />
+    },
+    {
+      key: 'markdown',
+      label: 'Markdown转换',
+      children: <MarkdownConverter />
     }
   ];
 
