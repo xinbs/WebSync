@@ -17,13 +17,10 @@ if not exist "%BASE_DIR%backend\venv" (
 )
 
 :: 检查前端依赖
-if not exist "%BASE_DIR%frontend\node_modules" (
-    echo 正在安装前端依赖...
-    cd /d "%BASE_DIR%frontend"
-    npm install
-) else (
-    echo 前端依赖已存在
-)
+:: 检查并更新前端依赖
+echo 正在检查前端依赖...
+cd /d "%BASE_DIR%frontend"
+call npm install --legacy-peer-deps
 
 :: 构建前端项目
 if not exist "%BASE_DIR%frontend\build" (
