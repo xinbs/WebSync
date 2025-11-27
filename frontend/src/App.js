@@ -23,13 +23,13 @@ const App = () => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
-    
+
     if (token && savedUser) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser(JSON.parse(savedUser));
       setIsAuthenticated(true);
     }
-    
+
     setLoading(false);
   }, []);
 
@@ -98,11 +98,11 @@ const App = () => {
 
   if (loading) {
     return (
-      <div style={{ 
-        height: '100vh', 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center' 
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center'
       }}>
         <Spin size="large" />
       </div>
@@ -113,33 +113,35 @@ const App = () => {
     return <Auth onAuthSuccess={handleAuthSuccess} />;
   }
 
+  const renderTabBarExtraContent = {
+    left: (
+      <Title level={4} style={{ margin: '0 24px 0 0', lineHeight: '46px', minWidth: '200px' }}>
+        WebSync 文件同步工具
+      </Title>
+    ),
+    right: (
+      <Space>
+        <span>{user?.email}</span>
+        <Button
+          type="text"
+          icon={<LogoutOutlined />}
+          onClick={handleLogout}
+        >
+          退出登录
+        </Button>
+      </Space>
+    )
+  };
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        padding: '0 24px',
-        background: '#fff',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-      }}>
-        <Title level={3} style={{ margin: 0 }}>
-          WebSync 文件同步工具
-        </Title>
-        <Space>
-          <span>{user?.email}</span>
-          <Button 
-            type="text" 
-            icon={<LogoutOutlined />} 
-            onClick={handleLogout}
-          >
-            退出登录
-          </Button>
-        </Space>
-      </Header>
-      <Content style={{ padding: '24px', background: '#f0f2f5' }}>
-        <Tabs items={tabItems} />
-      </Content>
+      <div style={{ background: '#fff', padding: '0 24px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', zIndex: 1 }}>
+        <Tabs
+          items={tabItems}
+          tabBarExtraContent={renderTabBarExtraContent}
+          style={{ margin: 0 }}
+        />
+      </div>
     </Layout>
   );
 };

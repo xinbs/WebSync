@@ -25,6 +25,16 @@ if not exist "%BASE_DIR%frontend\node_modules" (
     echo 前端依赖已存在
 )
 
+:: 构建前端项目
+if not exist "%BASE_DIR%frontend\build" (
+    echo 正在构建前端项目...
+    cd /d "%BASE_DIR%frontend"
+    call npm run build
+) else (
+    echo 前端构建产物已存在，跳过构建
+    echo 如果需要更新前端，请删除 frontend\build 目录后重试
+)
+
 :: 启动后端服务
 echo 正在启动后端服务...
 cd /d "%BASE_DIR%backend"
