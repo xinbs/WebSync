@@ -20,6 +20,8 @@
 !.env.example
 
 # Logs
+logs/
+pids/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
