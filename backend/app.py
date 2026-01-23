@@ -33,11 +33,12 @@ SYNC_FOLDER = os.environ.get('SYNC_FOLDER', 'sync')
 SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///websync.db')
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'your-secret-key')
 JWT_ACCESS_TOKEN_EXPIRES = int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRES', 86400))
+ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
 
 app = Flask(__name__)
 
-# 配置 CORS，允许所有跨域请求（仅用于开发环境）
-CORS(app, supports_credentials=True)
+# 配置 CORS，允许指定源的跨域请求
+CORS(app, origins=ALLOWED_ORIGINS, supports_credentials=True)
 
 # 配置
 app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
@@ -50,7 +51,7 @@ jwt = JWTManager(app)
 # 初始化 SocketIO
 socketio = SocketIO(
     app,
-    cors_allowed_origins="*",
+    cors_allowed_origins=ALLOWED_ORIGINS,
     async_mode='eventlet',  # 使用 eventlet 作为异步模式
     ping_timeout=60,
     logger=True,
