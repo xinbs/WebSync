@@ -6,7 +6,8 @@ import {
   CompressOutlined,
   ExpandOutlined,
   SaveOutlined,
-  FormatPainterOutlined
+  FormatPainterOutlined,
+  SwapOutlined
 } from '@ant-design/icons';
 import ReactJson from 'react-json-view';
 
@@ -62,12 +63,124 @@ const JsonFormatter = () => {
     }
   };
 
-  // 复制到剪贴板
-  const copyToClipboard = () => {
-    if (inputJson) {
-      navigator.clipboard.writeText(inputJson)
-        .then(() => message.success('已复制到剪贴板'))
-        .catch(() => message.error('复制失败'));
+  // 去除转义字符并格式化
+  // 处理类似 {\"key\":\"value\"} 这种格式的 JSON
+  const unescapeAndFormat = () => {
+    if (!inputJson.trim()) {
+      message.warning('请先输入内容');
+      return;
+    }
+
+    let text = inputJson.trim();
+    
+    // 清理可能存在的不可见字符（零宽字符、BOM等）
+    text = text
+      .replace(/^\uFEFF/, '')  // BOM
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')  // 零宽字符
+      .replace(/[\u00A0]/g, ' ');  // 不间断空格转普通空格
+    
+    // 如果是被引号包裹的字符串，先去掉外层引号
+    if ((text.startsWith('"') && text.endsWith('"')) ||
+        (text.startsWith("'") && text.endsWith("'"))) {
+      text = text.slice(1, -1);
+    }
+
+    // 尝试多种方法
+    const tryParse = (str) => {
+      const parsed = JSON.parse(str);
+      const formatted = JSON.stringify(parsed, null, 2);
+      setInputJson(formatted);
+      setParsedJson(parsed);
+      setError('');
+      message.success('已去除转义并格式化');
+    };
+
+    // 方法0：先尝试直接解析（可能已经是有效JSON）
+    try {
+      tryParse(text);
+      return;
+    } catch (e0) {
+      // 不是有效JSON，继续尝试去除转义
+    }
+
+    // 方法1：只替换 \" -> "
+    try {
+      const unescaped = text.replace(/\\"/g, '"');
+      tryParse(unescaped);
+      return;
+    } catch (e1) {
+      
+      // 方法2：处理可能存在的实际换行符（JSON字符串中不允许的）
+      try {
+        let unescaped = text.replace(/\\"/g, '"');
+        // 将实际的换行符、制表符替换为转义序列
+        unescaped = unescaped
+          .replace(/\r\n/g, '\\r\\n')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\r')
+          .replace(/\t/g, '\\t');
+        tryParse(unescaped);
+        return;
+      } catch (e2) {
+        // 方法3：更激进的清理
+        try {
+          let unescaped = text.replace(/\\"/g, '"');
+          // 移除所有控制字符
+          // eslint-disable-next-line no-control-regex
+          unescaped = unescaped.replace(/[\x00-\x1F\x7F]/g, (match) => {
+            // 保留常见的转义序列
+            const code = match.charCodeAt(0);
+            if (code === 9) return '\\t';  // Tab
+            if (code === 10) return '\\n'; // LF
+            if (code === 13) return '\\r'; // CR
+            return ''; // 移除其他控制字符
+          });
+          tryParse(unescaped);
+          return;
+        } catch (e3) {
+          message.error('去除转义失败: ' + e1.message);
+        }
+      }
+    }
+  };
+
+  // 复制到剪贴板（兼容多种环境）
+  const copyToClipboard = async () => {
+    if (!inputJson) {
+      message.warning('没有内容可复制');
+      return;
+    }
+
+    try {
+      // 优先使用现代 Clipboard API
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(inputJson);
+        message.success('已复制到剪贴板');
+        return;
+      }
+
+      // 后备方案：使用 execCommand
+      const textArea = document.createElement('textarea');
+      textArea.value = inputJson;
+      // 避免滚动到页面底部
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      textArea.style.top = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+
+      if (successful) {
+        message.success('已复制到剪贴板');
+      } else {
+        message.error('复制失败，请手动复制');
+      }
+    } catch (err) {
+      console.error('复制失败:', err);
+      message.error('复制失败: ' + err.message);
     }
   };
 
@@ -103,6 +216,9 @@ const JsonFormatter = () => {
             </Tooltip>
             <Tooltip title="压缩">
               <Button icon={<CompressOutlined />} onClick={() => formatInput(true)} />
+            </Tooltip>
+            <Tooltip title='去除转义并格式化（处理 \" 等转义字符）'>
+              <Button icon={<SwapOutlined />} onClick={unescapeAndFormat} />
             </Tooltip>
             <Tooltip title="复制">
               <Button icon={<CopyOutlined />} onClick={copyToClipboard} />
