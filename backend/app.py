@@ -43,6 +43,10 @@ JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', '')
 JWT_ACCESS_TOKEN_EXPIRES = int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRES', 86400))
 ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
 MAX_UPLOAD_SIZE = int(os.environ.get('MAX_UPLOAD_SIZE', 100 * 1024 * 1024))
+MAGIC_LINK_DEFAULT_TTL = int(os.environ.get('MAGIC_LINK_DEFAULT_TTL', 120))
+MAGIC_LINK_MIN_TTL = int(os.environ.get('MAGIC_LINK_MIN_TTL', 60))
+MAGIC_LINK_MAX_TTL = int(os.environ.get('MAGIC_LINK_MAX_TTL', 600))
+MAGIC_LINK_RATE_LIMIT = int(os.environ.get('MAGIC_LINK_RATE_LIMIT', 10))
 GOOGLE_OAUTH_STATE_COOKIE = 'websync_oauth_state'
 GOOGLE_OAUTH_STATE_MAX_AGE = 600
 
@@ -54,6 +58,14 @@ if (
     raise RuntimeError('JWT_SECRET_KEY 必须配置为至少 32 个字符的随机密钥')
 if MAX_UPLOAD_SIZE <= 0:
     raise RuntimeError('MAX_UPLOAD_SIZE 必须大于 0')
+if not (
+    0 < MAGIC_LINK_MIN_TTL
+    <= MAGIC_LINK_DEFAULT_TTL
+    <= MAGIC_LINK_MAX_TTL
+):
+    raise RuntimeError('Magic Link 有效期配置无效')
+if MAGIC_LINK_RATE_LIMIT <= 0:
+    raise RuntimeError('MAGIC_LINK_RATE_LIMIT 必须大于 0')
 
 app = Flask(__name__)
 
@@ -107,6 +119,15 @@ class User(db.Model):
     last_login_attempt = db.Column(db.DateTime)
     storage_limit = db.Column(db.BigInteger, nullable=False, default=1024*1024*1024)  # 默认1GB
     storage_used = db.Column(db.BigInteger, nullable=False, default=0)
+
+class MagicLoginCode(db.Model):
+    __tablename__ = 'magic_login_codes'
+    id = db.Column(db.Integer, primary_key=True)
+    code_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    used_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 @jwt.token_in_blocklist_loader
 def reject_non_allowed_users(jwt_header, jwt_payload):
@@ -285,14 +306,25 @@ def load_google_oauth_config():
                 return config, redirect_uris[0]
     raise RuntimeError('未找到有效的 Google OAuth client_secret JSON')
 
-def frontend_redirect(fragment):
+def get_frontend_url():
     _, callback_uri = load_google_oauth_config()
     callback_parts = urllib.parse.urlsplit(callback_uri)
-    frontend_url = os.environ.get(
+    return os.environ.get(
         'FRONTEND_URL',
         urllib.parse.urlunsplit((callback_parts.scheme, callback_parts.netloc, '/', '', ''))
     ).rstrip('/')
+
+def frontend_redirect(fragment):
+    frontend_url = get_frontend_url()
     return redirect(f'{frontend_url}/#{fragment}')
+
+def no_store_json(payload, status=200):
+    response = jsonify(payload)
+    response.status_code = status
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return response
 
 @app.route('/api/auth/google', methods=['GET'])
 def google_login():
@@ -417,6 +449,102 @@ def auth_me():
             'role': user.role
         }
     })
+
+@app.route('/api/auth/magic-link', methods=['POST'])
+@jwt_required()
+def create_magic_link():
+    current_user = get_current_user()
+    if not current_user:
+        return no_store_json({'error': '用户未找到'}, 404)
+
+    try:
+        config, _ = load_google_oauth_config()
+        if current_user.email.lower() != config['allowed_email'].strip().lower():
+            return no_store_json({'error': '没有权限生成临时登录链接'}, 403)
+
+        payload = request.get_json(silent=True) or {}
+        expires_in = int(payload.get('expires_in', MAGIC_LINK_DEFAULT_TTL))
+        if not MAGIC_LINK_MIN_TTL <= expires_in <= MAGIC_LINK_MAX_TTL:
+            return no_store_json({
+                'error': (
+                    f'有效期必须在 {MAGIC_LINK_MIN_TTL} 到 '
+                    f'{MAGIC_LINK_MAX_TTL} 秒之间'
+                )
+            }, 400)
+
+        now = datetime.utcnow()
+        recent_count = MagicLoginCode.query.filter(
+            MagicLoginCode.user_id == current_user.id,
+            MagicLoginCode.created_at >= now - timedelta(hours=1)
+        ).count()
+        if recent_count >= MAGIC_LINK_RATE_LIMIT:
+            return no_store_json({'error': '临时登录链接生成过于频繁，请稍后再试'}, 429)
+
+        # 仅清理一天以前的记录，保留近期记录用于限流和审计。
+        MagicLoginCode.query.filter(
+            MagicLoginCode.expires_at < now - timedelta(days=1)
+        ).delete(synchronize_session=False)
+
+        code = secrets.token_urlsafe(32)
+        code_hash = hashlib.sha256(code.encode('utf-8')).hexdigest()
+        expires_at = now + timedelta(seconds=expires_in)
+        db.session.add(MagicLoginCode(
+            code_hash=code_hash,
+            user_id=current_user.id,
+            expires_at=expires_at
+        ))
+        db.session.commit()
+
+        magic_link = (
+            f'{get_frontend_url()}/#magic_code='
+            f'{urllib.parse.quote(code, safe="")}'
+        )
+        return no_store_json({
+            'magic_link': magic_link,
+            'expires_in': expires_in,
+            'expires_at': expires_at.isoformat() + 'Z'
+        })
+    except (KeyError, TypeError, ValueError, OSError, RuntimeError):
+        db.session.rollback()
+        return no_store_json({'error': '无法生成临时登录链接'}, 400)
+
+@app.route('/api/auth/magic-link/consume', methods=['POST'])
+def consume_magic_link():
+    payload = request.get_json(silent=True) or {}
+    code = payload.get('code')
+    if not isinstance(code, str) or not 20 <= len(code) <= 200:
+        return no_store_json({'error': '临时登录链接无效或已过期'}, 400)
+
+    now = datetime.utcnow()
+    code_hash = hashlib.sha256(code.encode('utf-8')).hexdigest()
+    record = MagicLoginCode.query.filter_by(code_hash=code_hash).first()
+    if not record:
+        return no_store_json({'error': '临时登录链接无效或已过期'}, 400)
+
+    user_id = record.user_id
+    consumed = MagicLoginCode.query.filter(
+        MagicLoginCode.id == record.id,
+        MagicLoginCode.used_at.is_(None),
+        MagicLoginCode.expires_at > now
+    ).update({'used_at': now}, synchronize_session=False)
+    if consumed != 1:
+        db.session.rollback()
+        return no_store_json({'error': '临时登录链接无效或已过期'}, 400)
+
+    try:
+        config, _ = load_google_oauth_config()
+        user = db.session.get(User, user_id)
+        allowed_email = config['allowed_email'].strip().lower()
+        if not user or user.email.lower() != allowed_email:
+            db.session.commit()
+            return no_store_json({'error': '临时登录链接无效或已过期'}, 400)
+
+        db.session.commit()
+        access_token = create_access_token(identity=str(user.id))
+        return no_store_json({'access_token': access_token})
+    except (KeyError, OSError, RuntimeError):
+        db.session.rollback()
+        return no_store_json({'error': '临时登录链接无效或已过期'}, 400)
 
 @app.route('/api/users', methods=['GET'])
 @jwt_required()
