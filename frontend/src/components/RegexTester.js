@@ -7,6 +7,14 @@ import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 const { TextArea } = Input;
 const { Title, Text } = Typography;
 
+const escapeHtml = (value) => value.replace(/[&<>"']/g, (character) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#039;'
+}[character]));
+
 const RegexTester = () => {
   const [pattern, setPattern] = useState('');
   const [flags, setFlags] = useState('g');
@@ -19,7 +27,7 @@ const RegexTester = () => {
   // 更新高亮文本
   const updateHighlight = (text, matches) => {
     if (!matches.length) {
-      setHighlightedText(text);
+      setHighlightedText(escapeHtml(text));
       return;
     }
 
@@ -27,13 +35,13 @@ const RegexTester = () => {
     let highlighted = '';
     matches.forEach((match, index) => {
       // 添加匹配前的文本
-      highlighted += text.slice(lastIndex, match.index);
+      highlighted += escapeHtml(text.slice(lastIndex, match.index));
       // 添加带高亮的匹配文本
-      highlighted += `<span class="regex-match match-${index % 5}">${match[0]}</span>`;
+      highlighted += `<span class="regex-match match-${index % 5}">${escapeHtml(match[0])}</span>`;
       lastIndex = match.index + match[0].length;
     });
     // 添加剩余文本
-    highlighted += text.slice(lastIndex);
+    highlighted += escapeHtml(text.slice(lastIndex));
     setHighlightedText(highlighted);
   };
 
@@ -293,4 +301,4 @@ const RegexTester = () => {
   );
 };
 
-export default RegexTester; 
+export default RegexTester;

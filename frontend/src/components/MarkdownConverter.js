@@ -3,6 +3,8 @@ import { Card, Input, Button, Upload, message, Space, Divider, Row, Col, Typogra
 import { UploadOutlined, DownloadOutlined, FileImageOutlined, FileTextOutlined, SettingOutlined } from '@ant-design/icons';
 import { marked } from 'marked';
 import { toPng } from 'html-to-image';
+import DOMPurify from 'dompurify';
+import mermaid from 'mermaid';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -156,7 +158,11 @@ const MarkdownConverter = () => {
   // 生成水印HTML
   const getWatermarkHtml = () => {
     if (!watermarkEnabled || !watermarkText.trim()) return '';
-    return `<div class="watermark">${watermarkText}</div>`;
+    const safeText = DOMPurify.sanitize(watermarkText, {
+      ALLOWED_TAGS: [],
+      ALLOWED_ATTR: []
+    });
+    return `<div class="watermark">${safeText}</div>`;
   };
 
   // 配置marked选项
@@ -176,7 +182,7 @@ const MarkdownConverter = () => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Markdown 渲染结果</title>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js"></script>
     <style>
         body {
             font-family: 'Microsoft YaHei', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -320,7 +326,11 @@ const MarkdownConverter = () => {
         ${getWatermarkHtml()}
     </div>
     <script>
-        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+        mermaid.initialize({
+          startOnLoad: true,
+          theme: 'default',
+          securityLevel: 'sandbox'
+        });
     </script>
 </body>
 </html>`;
@@ -332,9 +342,8 @@ const MarkdownConverter = () => {
     // 匹配被marked转换后的mermaid代码块: <pre><code class="language-mermaid">...</code></pre>
     const result = html.replace(/<pre><code class="language-mermaid">(.*?)<\/code><\/pre>/gs, (match, code) => {
       console.log('Found mermaid block in HTML:', code.substring(0, 50) + '...');
-      // 解码HTML实体
-      const decodedCode = code.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-      return `<div class="mermaid">${decodedCode.trim()}</div>`;
+      // 保留 HTML 实体，使图表源码始终作为文本进入 DOM。
+      return `<div class="mermaid">${code.trim()}</div>`;
     });
     console.log('Mermaid HTML processing complete');
     return result;
@@ -363,7 +372,10 @@ const MarkdownConverter = () => {
       const html = marked(markdownText);
       // 然后处理转换后HTML中的mermaid代码块
       const processedHtml = processMermaidInHtml(html);
-      const styledHtml = getStyledHtml(processedHtml);
+      const cleanHtml = DOMPurify.sanitize(processedHtml, {
+        USE_PROFILES: { html: true }
+      });
+      const styledHtml = getStyledHtml(cleanHtml);
       setHtmlContent(styledHtml);
       message.success('转换成功！');
     } catch (error) {
@@ -371,33 +383,18 @@ const MarkdownConverter = () => {
     }
   };
 
-  // 加载mermaid库
+  // 使用本地依赖并在隔离 iframe 中渲染 Mermaid，避免执行图表中的 HTML。
   useEffect(() => {
-    if (!window.mermaid) {
-      console.log('Loading Mermaid library...');
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js';
-      script.onload = () => {
-        console.log('Mermaid library loaded successfully');
-        window.mermaid.initialize({ 
-          startOnLoad: false, 
-          theme: 'default',
-          securityLevel: 'loose'
-        });
-        console.log('Mermaid initialized');
-      };
-      script.onerror = (error) => {
-        console.error('Failed to load Mermaid library:', error);
-      };
-      document.head.appendChild(script);
-    } else {
-      console.log('Mermaid library already loaded');
-    }
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'sandbox'
+    });
   }, []);
 
   // 处理预览区域的mermaid渲染
   useEffect(() => {
-    if (htmlContent && window.mermaid) {
+    if (htmlContent) {
       // 延迟执行以确保DOM已更新
       setTimeout(() => {
         try {
@@ -410,7 +407,7 @@ const MarkdownConverter = () => {
                 console.log('Processing mermaid element:', element.textContent.substring(0, 50));
               }
             });
-            window.mermaid.init(undefined, mermaidElements);
+            mermaid.run({ nodes: mermaidElements });
           }
         } catch (error) {
           console.error('Mermaid rendering error:', error);

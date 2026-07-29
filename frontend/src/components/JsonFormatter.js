@@ -30,16 +30,7 @@ const JsonFormatter = () => {
     }
 
     try {
-      // 尝试解析 JSON
-      let parsed;
-      try {
-        parsed = JSON.parse(inputJson);
-      } catch (e) {
-        // 尝试解析可能包含转义字符的 JSON
-        // 注意：eval 有安全风险，但在纯前端工具且用户明确输入的情况下通常可接受，或者可以用更安全的方式
-        // 这里为了保持原有功能的兼容性，暂时保留，但建议后续改进
-        parsed = JSON.parse(JSON.stringify(eval('(' + inputJson + ')')));
-      }
+      const parsed = JSON.parse(inputJson);
       setParsedJson(parsed);
       setError('');
     } catch (err) {
@@ -303,4 +294,4 @@ const JsonFormatter = () => {
   );
 };
 
-export default JsonFormatter; 
+export default JsonFormatter;

@@ -49,8 +49,9 @@ pip install -r requirements.txt
 UPLOAD_FOLDER=uploads
 SYNC_FOLDER=sync
 SQLALCHEMY_DATABASE_URI=sqlite:///websync.db
-JWT_SECRET_KEY=your-secret-key
+JWT_SECRET_KEY=replace-with-at-least-32-random-characters
 JWT_ACCESS_TOKEN_EXPIRES=86400
+MAX_UPLOAD_SIZE=104857600
 ```
 
 3. 启动后端服务：

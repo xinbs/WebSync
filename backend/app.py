@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, create_access_token, get_jwt_identity, jwt_required
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import RequestEntityTooLarge
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from flask_socketio import SocketIO, emit
@@ -38,11 +39,21 @@ logger = logging.getLogger(__name__)
 UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')
 SYNC_FOLDER = os.environ.get('SYNC_FOLDER', 'sync')
 SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///websync.db')
-JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'your-secret-key')
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', '')
 JWT_ACCESS_TOKEN_EXPIRES = int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRES', 86400))
 ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
+MAX_UPLOAD_SIZE = int(os.environ.get('MAX_UPLOAD_SIZE', 100 * 1024 * 1024))
 GOOGLE_OAUTH_STATE_COOKIE = 'websync_oauth_state'
 GOOGLE_OAUTH_STATE_MAX_AGE = 600
+
+if (
+    len(JWT_SECRET_KEY) < 32
+    or JWT_SECRET_KEY in {'your-secret-key', 'your-secret-key-here'}
+    or JWT_SECRET_KEY.startswith('replace-')
+):
+    raise RuntimeError('JWT_SECRET_KEY 必须配置为至少 32 个字符的随机密钥')
+if MAX_UPLOAD_SIZE <= 0:
+    raise RuntimeError('MAX_UPLOAD_SIZE 必须大于 0')
 
 app = Flask(__name__)
 
@@ -53,6 +64,7 @@ CORS(app, origins=ALLOWED_ORIGINS, supports_credentials=True)
 app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
 app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=JWT_ACCESS_TOKEN_EXPIRES)
+app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_SIZE
 
 db = SQLAlchemy(app)
 jwt = JWTManager(app)
@@ -496,8 +508,9 @@ def upload_file():
         if file:
             logger.info(f"准备上传文件: {file.filename}")
             # 检查文件大小和存储限制
-            file_size = len(file.read())
-            file.seek(0)  # 重置文件指针
+            file.stream.seek(0, os.SEEK_END)
+            file_size = file.stream.tell()
+            file.stream.seek(0)
             
             logger.info(f"文件大小: {file_size}, 当前已用空间: {current_user.storage_used}, 存储限制: {current_user.storage_limit}")
             
@@ -569,6 +582,8 @@ def upload_file():
         logger.error("文件上传失败：未知原因")
         return jsonify({'error': '文件上传失败'}), 400
         
+    except RequestEntityTooLarge:
+        return jsonify({'error': '上传文件超过大小限制'}), 413
     except Exception as e:
         logger.error(f"文件上传过程中发生错误: {str(e)}")
         db.session.rollback()
