@@ -485,6 +485,13 @@ def create_magic_link():
             MagicLoginCode.expires_at < now - timedelta(days=1)
         ).delete(synchronize_session=False)
 
+        # 同一账号只保留最新一条未使用链接，重新生成会立即作废旧链接。
+        MagicLoginCode.query.filter(
+            MagicLoginCode.user_id == current_user.id,
+            MagicLoginCode.used_at.is_(None),
+            MagicLoginCode.expires_at > now
+        ).update({'used_at': now}, synchronize_session=False)
+
         code = secrets.token_urlsafe(32)
         code_hash = hashlib.sha256(code.encode('utf-8')).hexdigest()
         expires_at = now + timedelta(seconds=expires_in)

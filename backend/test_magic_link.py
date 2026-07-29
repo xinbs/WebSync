@@ -132,6 +132,22 @@ class MagicLinkTestCase(unittest.TestCase):
         finally:
             module.MAGIC_LINK_RATE_LIMIT = original_limit
 
+    def test_regeneration_invalidates_previous_unused_link(self):
+        first_code = self.create_code()
+        second_code = self.create_code()
+
+        first = self.client.post(
+            '/api/auth/magic-link/consume',
+            json={'code': first_code}
+        )
+        self.assertEqual(first.status_code, 400)
+
+        second = self.client.post(
+            '/api/auth/magic-link/consume',
+            json={'code': second_code}
+        )
+        self.assertEqual(second.status_code, 200)
+
 
 if __name__ == '__main__':
     unittest.main()
