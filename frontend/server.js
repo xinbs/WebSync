@@ -84,7 +84,7 @@ const apiProxy = createProxyMiddleware({
 });
 
 // 设置代理路由
-app.use('/api', apiProxy);
+app.use(['/api', '/auth/google/callback'], apiProxy);
 app.use('/socket.io', apiProxy);  // 添加 WebSocket 代理路由
 
 // 静态文件服务

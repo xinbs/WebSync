@@ -1,15 +1,22 @@
-from flask import Flask, request, send_file, jsonify
+from flask import Flask, request, send_file, jsonify, redirect
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, create_access_token, get_jwt_identity, jwt_required
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.utils import secure_filename
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from flask_socketio import SocketIO, emit
 import os
+import glob
+import json
 import hashlib
 import time
 import bcrypt
+import secrets
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta
 from enum import Enum
 from sqlalchemy import Enum as SQLEnum
@@ -34,6 +41,8 @@ SQLALCHEMY_DATABASE_URI = os.environ.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///w
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'your-secret-key')
 JWT_ACCESS_TOKEN_EXPIRES = int(os.environ.get('JWT_ACCESS_TOKEN_EXPIRES', 86400))
 ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:3000').split(',')
+GOOGLE_OAUTH_STATE_COOKIE = 'websync_oauth_state'
+GOOGLE_OAUTH_STATE_MAX_AGE = 600
 
 app = Flask(__name__)
 
@@ -86,6 +95,17 @@ class User(db.Model):
     last_login_attempt = db.Column(db.DateTime)
     storage_limit = db.Column(db.BigInteger, nullable=False, default=1024*1024*1024)  # 默认1GB
     storage_used = db.Column(db.BigInteger, nullable=False, default=0)
+
+@jwt.token_in_blocklist_loader
+def reject_non_allowed_users(jwt_header, jwt_payload):
+    """旧账号已经签发的 JWT 也不能继续访问。"""
+    try:
+        config, _ = load_google_oauth_config()
+        allowed_email = config['allowed_email'].strip().lower()
+        user = db.session.get(User, int(jwt_payload['sub']))
+        return not user or user.email.lower() != allowed_email
+    except (KeyError, TypeError, ValueError, OSError, RuntimeError):
+        return True
 
 class File(db.Model):
     __tablename__ = 'files'
@@ -197,19 +217,24 @@ def create_initial_admin():
     try:
         # 确保数据库表已创建
         db.create_all()
-        
-        admin = User.query.filter_by(role=UserRole.ADMIN).first()
+
+        config, _ = load_google_oauth_config()
+        allowed_email = config['allowed_email'].strip().lower()
+        admin = User.query.filter_by(email=allowed_email).first()
         if not admin:
-            password = bcrypt.hashpw('admin123'.encode('utf-8'), bcrypt.gensalt())
+            # password 字段是旧数据库结构的必填字段；随机值不可用于登录。
+            password = bcrypt.hashpw(secrets.token_bytes(32), bcrypt.gensalt())
             admin = User(
-                email='admin@websync.com',
+                email=allowed_email,
                 password=password,
                 role=UserRole.ADMIN,
                 storage_limit=1024*1024*1024*100  # 管理员默认100GB
             )
             db.session.add(admin)
-            db.session.commit()
-            print("Initial admin account created")
+        else:
+            admin.role = UserRole.ADMIN
+        db.session.commit()
+        print("Google account ready")
     except Exception as e:
         print(f"Error creating initial admin: {e}")
         db.session.rollback()
@@ -224,80 +249,156 @@ def get_current_user():
 @app.route('/api/register', methods=['POST'])
 @jwt_required()
 def register():
-    current_user = User.query.get(get_jwt_identity())
-    if current_user.role not in [UserRole.ADMIN, UserRole.MANAGER]:
-        return jsonify({'error': '没有权限创建用户'}), 403
-        
-    data = request.get_json()
-    if not data or 'email' not in data or 'password' not in data:
-        return jsonify({'error': '请提供邮箱和密码'}), 400
-        
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': '邮箱已被注册'}), 400
-        
-    # 验证密码长度
-    if len(data['password']) < 6:
-        return jsonify({'error': '密码长度至少为6位'}), 400
-        
-    # 创建新用户
-    hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
-    new_user = User(
-        email=data['email'],
-        password=hashed_password,
-        role=data.get('role', UserRole.USER),
-        created_by=current_user.id
-    )
-    
-    db.session.add(new_user)
-    db.session.commit()
-    
-    # 创建访问令牌，确保 new_user.id 转换为字符串
-    access_token = create_access_token(identity=str(new_user.id))
-    
-    return jsonify({
-        'access_token': access_token,
-        'user': {
-            'id': new_user.id,
-            'email': new_user.email,
-            'role': new_user.role
-        }
-    }), 201
+    return jsonify({'error': '本站只允许指定的 Google 账号登录，不能创建其他账号'}), 403
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    data = request.get_json()
-    if not data or 'email' not in data or 'password' not in data:
-        return jsonify({'error': '请提供邮箱和密码'}), 400
-        
-    user = User.query.filter_by(email=data['email']).first()
+    return jsonify({'error': '密码登录已关闭，请使用 Google 登录'}), 410
+
+def load_google_oauth_config():
+    configured_path = os.environ.get('GOOGLE_OAUTH_CLIENT_JSON')
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    candidates = [configured_path] if configured_path else []
+    candidates.extend(sorted(glob.glob(os.path.join(project_root, 'client_secret_*.json'))))
+
+    for path in candidates:
+        if path and os.path.isfile(path):
+            with open(path, 'r', encoding='utf-8') as config_file:
+                config = json.load(config_file).get('web')
+            required_keys = ('client_id', 'client_secret', 'auth_uri', 'token_uri', 'allowed_email')
+            if config and all(config.get(key) for key in required_keys):
+                redirect_uris = config.get('redirect_uris') or []
+                if not redirect_uris:
+                    raise RuntimeError('Google OAuth JSON 中缺少 redirect_uris')
+                return config, redirect_uris[0]
+    raise RuntimeError('未找到有效的 Google OAuth client_secret JSON')
+
+def frontend_redirect(fragment):
+    _, callback_uri = load_google_oauth_config()
+    callback_parts = urllib.parse.urlsplit(callback_uri)
+    frontend_url = os.environ.get(
+        'FRONTEND_URL',
+        urllib.parse.urlunsplit((callback_parts.scheme, callback_parts.netloc, '/', '', ''))
+    ).rstrip('/')
+    return redirect(f'{frontend_url}/#{fragment}')
+
+@app.route('/api/auth/google', methods=['GET'])
+def google_login():
+    try:
+        config, callback_uri = load_google_oauth_config()
+        state = secrets.token_urlsafe(32)
+        signed_state = URLSafeTimedSerializer(JWT_SECRET_KEY).dumps(
+            state,
+            salt='google-oauth-state'
+        )
+        params = urllib.parse.urlencode({
+            'client_id': config['client_id'],
+            'redirect_uri': callback_uri,
+            'response_type': 'code',
+            'scope': 'openid email profile',
+            'state': state,
+            'prompt': 'select_account'
+        })
+        response = redirect(f"{config['auth_uri']}?{params}")
+        response.set_cookie(
+            GOOGLE_OAUTH_STATE_COOKIE,
+            signed_state,
+            max_age=GOOGLE_OAUTH_STATE_MAX_AGE,
+            httponly=True,
+            secure=urllib.parse.urlsplit(callback_uri).scheme == 'https',
+            samesite='Lax',
+            path='/'
+        )
+        return response
+    except (OSError, ValueError, RuntimeError) as error:
+        logger.error("Google OAuth 配置错误: %s", error)
+        return jsonify({'error': 'Google 登录配置不可用'}), 500
+
+@app.route('/auth/google/callback', methods=['GET'])
+def google_callback():
+    if request.args.get('error'):
+        return frontend_redirect('auth_error=google_denied')
+
+    code = request.args.get('code')
+    state = request.args.get('state')
+    signed_state = request.cookies.get(GOOGLE_OAUTH_STATE_COOKIE)
+    if not code or not state or not signed_state:
+        return frontend_redirect('auth_error=invalid_state')
+
+    try:
+        expected_state = URLSafeTimedSerializer(JWT_SECRET_KEY).loads(
+            signed_state,
+            salt='google-oauth-state',
+            max_age=GOOGLE_OAUTH_STATE_MAX_AGE
+        )
+        if not secrets.compare_digest(state, expected_state):
+            return frontend_redirect('auth_error=invalid_state')
+
+        config, callback_uri = load_google_oauth_config()
+        token_body = urllib.parse.urlencode({
+            'code': code,
+            'client_id': config['client_id'],
+            'client_secret': config['client_secret'],
+            'redirect_uri': callback_uri,
+            'grant_type': 'authorization_code'
+        }).encode('utf-8')
+        token_request = urllib.request.Request(
+            config['token_uri'],
+            data=token_body,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'}
+        )
+        with urllib.request.urlopen(token_request, timeout=10) as token_response:
+            token_data = json.load(token_response)
+
+        google_access_token = token_data.get('access_token')
+        if not google_access_token:
+            raise ValueError('Google token 响应中缺少 access_token')
+
+        userinfo_request = urllib.request.Request(
+            'https://openidconnect.googleapis.com/v1/userinfo',
+            headers={'Authorization': f'Bearer {google_access_token}'}
+        )
+        with urllib.request.urlopen(userinfo_request, timeout=10) as userinfo_response:
+            google_user = json.load(userinfo_response)
+
+        email = str(google_user.get('email', '')).lower()
+        allowed_email = config['allowed_email'].strip().lower()
+        if email != allowed_email or not google_user.get('email_verified'):
+            return frontend_redirect('auth_error=account_not_allowed')
+
+        user = User.query.filter_by(email=allowed_email).first()
+        if not user:
+            user = User(
+                email=allowed_email,
+                password=bcrypt.hashpw(secrets.token_bytes(32), bcrypt.gensalt()),
+                role=UserRole.ADMIN,
+                storage_limit=1024*1024*1024*100
+            )
+            db.session.add(user)
+            db.session.commit()
+        elif user.role != UserRole.ADMIN:
+            user.role = UserRole.ADMIN
+            db.session.commit()
+
+        access_token = create_access_token(identity=str(user.id))
+        response = frontend_redirect(
+            f'access_token={urllib.parse.quote(access_token, safe="")}'
+        )
+        response.delete_cookie(GOOGLE_OAUTH_STATE_COOKIE, path='/')
+        return response
+    except (BadSignature, SignatureExpired):
+        return frontend_redirect('auth_error=invalid_state')
+    except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError) as error:
+        logger.error("Google OAuth 回调失败: %s", error)
+        return frontend_redirect('auth_error=google_failed')
+
+@app.route('/api/auth/me', methods=['GET'])
+@jwt_required()
+def auth_me():
+    user = get_current_user()
     if not user:
-        return jsonify({'error': '用户不存在'}), 401
-        
-    # 检查登录尝试次数和时间限制
-    if user.login_attempts >= 5:
-        if user.last_login_attempt and (datetime.utcnow() - user.last_login_attempt).total_seconds() < 300:
-            return jsonify({'error': '登录尝试次数过多，请5分钟后再试'}), 429
-        else:
-            # 重置登录尝试次数
-            user.login_attempts = 0
-            
-    if not bcrypt.checkpw(data['password'].encode('utf-8'), user.password):
-        # 更新登录尝试记录
-        user.login_attempts += 1
-        user.last_login_attempt = datetime.utcnow()
-        db.session.commit()
-        return jsonify({'error': '密码错误'}), 401
-        
-    # 登录成功，重置登录尝试记录
-    user.login_attempts = 0
-    user.last_login_attempt = None
-    db.session.commit()
-    
-    # 创建访问令牌，确保 user.id 转换为字符串
-    access_token = create_access_token(identity=str(user.id))
-    
+        return jsonify({'error': '用户未找到'}), 404
     return jsonify({
-        'access_token': access_token,
         'user': {
             'id': user.id,
             'email': user.email,

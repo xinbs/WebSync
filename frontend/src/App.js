@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Typography, Button, Space, Spin, Tabs } from 'antd';
+import { Layout, Typography, Button, Space, Spin, Tabs, message } from 'antd';
 import { LogoutOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import Auth from './components/Auth';
 import FileList from './components/FileList';
 import UploadForm from './components/UploadForm';
-import UserManagement from './components/UserManagement';
 import Clipboard from './components/Clipboard';
 import JsonFormatter from './components/JsonFormatter';
 import RegexTester from './components/RegexTester';
@@ -21,26 +20,52 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
+    const restoreSession = async () => {
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      const callbackToken = params.get('access_token');
+      const authError = params.get('auth_error');
+      const token = callbackToken || localStorage.getItem('token');
 
-    if (token && savedUser) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(JSON.parse(savedUser));
-      setIsAuthenticated(true);
-    }
+      if (window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
 
-    setLoading(false);
+      if (authError) {
+        const errorMessages = {
+          account_not_allowed: '此 Google 账号无权访问',
+          google_denied: 'Google 登录已取消',
+          invalid_state: '登录请求已失效，请重试',
+          google_failed: 'Google 登录失败，请重试'
+        };
+        message.error(errorMessages[authError] || '登录失败');
+      }
+
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        const response = await axios.get('/api/auth/me');
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        setUser(response.data.user);
+        setIsAuthenticated(true);
+        if (callbackToken) {
+          message.success('登录成功');
+        }
+      } catch (error) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        delete axios.defaults.headers.common['Authorization'];
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    restoreSession();
   }, []);
-
-  const handleAuthSuccess = (data) => {
-    const { access_token, user } = data;
-    localStorage.setItem('token', access_token);
-    localStorage.setItem('user', JSON.stringify(user));
-    axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-    setUser(user);
-    setIsAuthenticated(true);
-  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -88,14 +113,6 @@ const App = () => {
     }
   ];
 
-  if (user?.role === 'admin') {
-    tabItems.push({
-      key: 'users',
-      label: '用户管理',
-      children: <UserManagement currentUser={user} />
-    });
-  }
-
   if (loading) {
     return (
       <div style={{
@@ -110,7 +127,7 @@ const App = () => {
   }
 
   if (!isAuthenticated) {
-    return <Auth onAuthSuccess={handleAuthSuccess} />;
+    return <Auth />;
   }
 
   const renderTabBarExtraContent = {

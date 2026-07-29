@@ -1,6 +1,6 @@
 # WebSync
 
-WebSync 是一个基于 Flask 和 React 的文件同步和共享系统。
+WebSync 是一个基于 Flask 和 React 的文件同步和共享系统。登录通过 Google OAuth 完成，仅允许本地配置的指定账号访问。
 
 ## 功能特性
 
@@ -158,11 +158,9 @@ npm run serve
    - 确保上传目录具有适当的写入权限
    - 定期备份数据库和上传的文件
 
-## 默认账户
+## 登录账户
 
-- 管理员账户：
-  - 邮箱：admin@websync.com
-  - 密码：admin123
+点击“使用 Google 登录”，并使用本地 OAuth JSON 中配置的允许账号完成授权。密码登录和其他账号登录均已关闭。
 
 ## 更新日志
 
