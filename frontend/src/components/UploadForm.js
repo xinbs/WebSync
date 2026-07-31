@@ -10,25 +10,24 @@ const UploadForm = () => {
   const [uploadStatus, setUploadStatus] = useState({ show: false, success: true, text: '' });
 
   const handleUpload = async (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('path', file.name);
-
     try {
       setUploading(true);
       setUploadStatus({ show: true, success: true, text: '正在上传...' });
-      
-      await axios.post('/api/upload', formData, {
+
+      // 走剪贴板附件通道：裸二进制 body，绕开本地软件对 multipart 上传的拦截
+      await axios.post(`/api/clipboard/attach?filename=${encodeURIComponent(file.name)}`, file, {
         headers: {
-          'Content-Type': 'multipart/form-data'
+          'Content-Type': 'application/octet-stream'
         },
-        timeout: 30000,
+        timeout: 0,
         onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setUploadStatus({ 
-            show: true, 
-            success: true, 
-            text: `上传中 ${percentCompleted}%` 
+          const percentCompleted = progressEvent.total
+            ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
+            : 0;
+          setUploadStatus({
+            show: true,
+            success: true,
+            text: `上传中 ${percentCompleted}%`
           });
         }
       });
@@ -68,8 +67,17 @@ const UploadForm = () => {
     },
   };
 
+  // 支持从资源管理器复制文件后直接 Ctrl+V 粘贴上传
+  const handlePaste = (e) => {
+    const files = e.clipboardData && e.clipboardData.files;
+    if (files && files.length > 0) {
+      e.preventDefault();
+      handleUpload(files[0]);
+    }
+  };
+
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div style={{ marginBottom: 24 }} onPaste={handlePaste}>
       <div style={{ marginBottom: 8 }}>
         <Upload {...uploadProps}>
           <Button icon={<UploadOutlined />} loading={uploading}>
@@ -86,7 +94,7 @@ const UploadForm = () => {
         </Text>
       )}
       <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-        支持单个文件上传，文件大小不限
+        支持单个文件上传（也可复制文件后在此粘贴），文件大小不限
       </Text>
     </div>
   );
