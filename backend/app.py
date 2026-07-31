@@ -25,6 +25,7 @@ from crypto_utils import crypto  # 导入加密工具
 import base64
 import io
 import logging
+import re
 from dotenv import load_dotenv
 from routes.patterns import patterns_bp
 
@@ -743,6 +744,110 @@ def attach_file():
         return jsonify({'error': '上传文件超过大小限制'}), 413
     except Exception as e:
         logger.error(f"attach 上传过程中发生错误: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': f'文件上传失败: {str(e)}'}), 500
+
+ATTACH_TMP_DIR = os.path.join(UPLOAD_FOLDER, '.tmp')
+ATTACH_TMP_MAX_AGE = 24 * 3600  # 超过 24 小时未完成的分块临时文件会被清理
+ATTACH_MAX_CHUNKS = 10000
+
+
+def _cleanup_stale_attach_tmp():
+    """顺手清理超期未完成的分块临时文件。"""
+    try:
+        now = time.time()
+        for path in glob.glob(os.path.join(ATTACH_TMP_DIR, '*.part')):
+            if now - os.path.getmtime(path) > ATTACH_TMP_MAX_AGE:
+                os.remove(path)
+                logger.info(f"清理超期分块临时文件: {path}")
+    except OSError:
+        pass
+
+
+@app.route('/api/clipboard/attach/chunk', methods=['POST'])
+@jwt_required()
+def attach_file_chunk():
+    """分块接收文件：每块 base64 编码后放在 JSON body 里，与文本剪贴板同形态。
+
+    请求格式: {upload_id, filename, index, total, offset, total_size, data}
+    服务器按 offset 写入临时文件，收齐 total 块后校验大小并转入正式文件。
+    """
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'error': '用户未找到'}), 404
+
+        data = request.get_json(silent=True) or {}
+        upload_id = str(data.get('upload_id', ''))
+        filename = secure_filename(str(data.get('filename', '')))
+        b64_data = data.get('data', '')
+
+        # upload_id 只允许安全字符，防止路径穿越
+        if not upload_id or not re.fullmatch(r'[A-Za-z0-9_-]{8,64}', upload_id):
+            return jsonify({'error': 'upload_id 无效'}), 400
+        if not filename:
+            return jsonify({'error': '文件名无效'}), 400
+
+        try:
+            index = int(data.get('index'))
+            total = int(data.get('total'))
+            offset = int(data.get('offset'))
+            total_size = int(data.get('total_size'))
+        except (TypeError, ValueError):
+            return jsonify({'error': '分块参数无效'}), 400
+
+        if not (0 <= index < total <= ATTACH_MAX_CHUNKS) or offset < 0 or total_size <= 0:
+            return jsonify({'error': '分块参数无效'}), 400
+
+        try:
+            chunk = base64.b64decode(b64_data, validate=True)
+        except Exception:
+            return jsonify({'error': '分块数据不是合法的 base64'}), 400
+
+        if offset + len(chunk) > total_size:
+            return jsonify({'error': '分块超出声明的文件大小'}), 400
+
+        # 首块时检查配额，并顺带清理超期临时文件
+        if index == 0:
+            _cleanup_stale_attach_tmp()
+            if current_user.storage_used + total_size > current_user.storage_limit:
+                logger.error("存储空间不足")
+                return jsonify({'error': '存储空间不足'}), 400
+
+        os.makedirs(ATTACH_TMP_DIR, exist_ok=True)
+        part_path = os.path.join(ATTACH_TMP_DIR, f'{upload_id}.part')
+
+        # 按偏移写入，同一块重传是幂等的
+        try:
+            with open(part_path, 'r+b' if os.path.exists(part_path) else 'wb') as f:
+                f.seek(offset)
+                f.write(chunk)
+        except OSError as e:
+            logger.error(f"分块写入失败: {str(e)}")
+            return jsonify({'error': f'分块写入失败: {str(e)}'}), 500
+
+        logger.info(f"attach 分块: {filename} [{index + 1}/{total}] offset={offset} size={len(chunk)}")
+
+        # 还未收齐
+        if index < total - 1:
+            return jsonify({'received': index})
+
+        # 最后一块：校验完整性后转入正式文件
+        if os.path.getsize(part_path) != total_size:
+            logger.error(f"分块拼好后大小不符: 期望 {total_size}, 实际 {os.path.getsize(part_path)}")
+            return jsonify({'error': '文件块不完整，请重传缺失的分块'}), 400
+
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        os.replace(part_path, file_path)
+        logger.info(f"分块上传完成: {filename}, 共 {total_size} 字节")
+
+        return _finalize_upload(current_user, filename, file_path)
+
+    except RequestEntityTooLarge:
+        return jsonify({'error': '分块超过大小限制'}), 413
+    except Exception as e:
+        logger.error(f"attach 分块处理错误: {str(e)}")
         db.session.rollback()
         return jsonify({'error': f'文件上传失败: {str(e)}'}), 500
 
