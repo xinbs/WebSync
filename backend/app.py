@@ -4,7 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, create_access_token, get_jwt_identity, jwt_required
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from werkzeug.utils import secure_filename
-from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.exceptions import RequestEntityTooLarge, ClientDisconnected
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from flask_socketio import SocketIO, emit
@@ -704,6 +704,7 @@ def attach_file():
         logger.info(f"文件保存路径: {file_path}")
 
         # 流式写入，避免大文件占用内存
+        bytes_written = 0
         try:
             with open(file_path, 'wb') as f:
                 while True:
@@ -711,15 +712,30 @@ def attach_file():
                     if not chunk:
                         break
                     f.write(chunk)
-            logger.info("文件保存成功")
+                    bytes_written += len(chunk)
+            logger.info(f"文件写入完成，收到 {bytes_written} 字节")
         except Exception as e:
+            # 连接被中途掐断（如本地安全软件截断请求体）时 werkzeug 会抛
+            # ClientDisconnected；无论哪种异常都要清掉写了一半的文件
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            if isinstance(e, ClientDisconnected):
+                logger.error(f"传输被中断: 声明 {file_size} 字节，实际收到 {bytes_written} 字节")
+                return jsonify({'error': f'文件传输不完整（{bytes_written}/{file_size} 字节），请重试'}), 400
             logger.error(f"文件保存失败: {str(e)}")
             return jsonify({'error': f'文件保存失败: {str(e)}'}), 500
 
-        if os.path.getsize(file_path) == 0:
+        # 校验实际收到的字节数与 Content-Length 一致，防止传输被中途截断
+        # 后误存半个文件
+        if bytes_written == 0:
             os.remove(file_path)
             logger.error("请求体为空")
             return jsonify({'error': '没有文件被上传'}), 400
+
+        if file_size and bytes_written != file_size:
+            os.remove(file_path)
+            logger.error(f"传输不完整: 声明 {file_size} 字节，实际收到 {bytes_written} 字节")
+            return jsonify({'error': f'文件传输不完整（{bytes_written}/{file_size} 字节），请重试'}), 400
 
         return _finalize_upload(current_user, filename, file_path)
 
